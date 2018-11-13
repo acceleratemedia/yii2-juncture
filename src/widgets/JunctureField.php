@@ -2,33 +2,23 @@
 namespace bvb\juncture\widgets;
 
 use bvb\juncture\behaviors\SaveJunctureRelationships;
-use yii\base\Widget;
 use yii\helpers\Html;
 use yii\helpers\Json;
 use yii\validators\Validator;
 use yii\web\JsExpression;
 use yii\web\View;
+use yii\bootstrap4\InputWidget;
 use Yii;
 
 /**
  * Widget uses the Select2 plugin to implement a UI for juncture relationships
  */
-class JunctureField extends Widget
+class JunctureField extends InputWidget
 {
     /**
      * @var \yii\widgets\ActiveForm
      */
     public $form;
-
-    /**
-     * @var \yii\db\ActiveRecord
-     */
-    public $model;
-
-    /**
-     * @var string
-     */
-    public $related_ids_attribute;
 
     /**
      * @var string
@@ -82,7 +72,7 @@ class JunctureField extends Widget
                 // --- Loop through the set up relationships to see if this widget is for the specified relationship
                 foreach($behavior->relationships as $relationship_data){
                     // --- Use some default settings if we have null values
-                    if($relationship_data['related_ids_attribute'] == $this->related_ids_attribute){
+                    if($relationship_data['related_ids_attribute'] == $this->attribute){
                         if($this->owner_id_attribute_in_juncture_table === null){
                             $this->owner_id_attribute_in_juncture_table = $relationship_data['owner_id_attribute_in_juncture_table'];
                         }
@@ -114,7 +104,7 @@ class JunctureField extends Widget
         return $this->render('juncture_field', [
             'form' => $this->form,
             'model' => $this->model,
-            'related_ids_attribute' => $this->related_ids_attribute,
+            'related_ids_attribute' => $this->attribute,
             'relation_name_in_juncture_table' => $this->relation_name_in_juncture_table,
             'juncture_relation_display_attribute' => $this->juncture_relation_display_attribute,
             'owner_id_attribute_in_juncture_table' => $this->owner_id_attribute_in_juncture_table,
@@ -127,7 +117,7 @@ class JunctureField extends Widget
     }
 
     /**
-     *@return void
+     * @return void
      */
     private function registerJunctureUiJs()
     {
@@ -151,7 +141,7 @@ class JunctureField extends Widget
 
         // --- Prepare some fields we can use in the javascript
         $fields_config_json = Json::encode($fields_config_data);
-        $field_id = Html::getInputId($this->model, $this->related_ids_attribute);
+        $field_id = Html::getInputId($this->model, $this->attribute);
         $juncture_identifier_shortname = strtolower($this->juncture_model->formName());
 
         // --- The javascript going into document.ready is specific to this instance

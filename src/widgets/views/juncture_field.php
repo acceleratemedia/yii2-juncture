@@ -26,7 +26,11 @@ $juncture_identifier_shortname = strtolower($juncture_model->formName());
                     <?php endforeach; ?>
                 </thead>
                 <tbody>
-                <?php foreach($model->{$additional_juncture_data_attribute} as $juncture_model): ?>
+                <?php 
+                // --- Very important to use our activefield for custom validation ids on these repeating juncture records
+                $original_field_class = $form->fieldClass;
+                $form->fieldClass = '\bvb\juncture\widgets\ActiveField';
+                foreach($model->{$additional_juncture_data_attribute} as $juncture_model): ?>
                     <tr id="<?= $owner_id_attribute_in_juncture_table; ?>-<?= $juncture_model->{$owner_id_attribute_in_juncture_table}; ?>-<?= $related_id_attribute_in_juncture_table; ?>-<?= $juncture_model->{$related_id_attribute_in_juncture_table}; ?>">
                         <td>
                             <?= Html::activeHiddenInput($juncture_model, $related_id_attribute_in_juncture_table, [
@@ -36,6 +40,9 @@ $juncture_identifier_shortname = strtolower($juncture_model->formName());
                             <?= $juncture_model->{$relation_name_in_juncture_table}->{$juncture_relation_display_attribute}; ?>
                         </td>
                         <?php
+
+
+                        // --- Loop through all juncture atrtibtues
                         foreach($juncture_attributes as $juncture_attribute_data): // --- Renders the existing values
                             $input_id = Html::getInputId($juncture_model, $juncture_attribute_data['attribute']).'-'.$juncture_model->{$related_id_attribute_in_juncture_table};
                             $input_name = $model_form_name.'['.$additional_juncture_data_attribute.']['.$juncture_model->{$related_id_attribute_in_juncture_table}.']['.$juncture_attribute_data['attribute'].']';
@@ -43,7 +50,10 @@ $juncture_identifier_shortname = strtolower($juncture_model->formName());
                         <td>
                             <?php if($juncture_attribute_data['input'] == 'dropDownList'): ?>
                             <?= $form->field($juncture_model, $juncture_attribute_data['attribute'], [
-                                'template' => '{input}{error}'
+                                'template' => '{input}{error}',
+                                'options' => [
+                                    'validation_id' => $input_id  // --- Customized so we can validate each attribute individually
+                                ],
                             ])->dropDownList($juncture_attribute_data['data'], [
                                 'name' => $input_name,
                                 'id' => $input_id
@@ -54,10 +64,11 @@ $juncture_identifier_shortname = strtolower($juncture_model->formName());
                                 'selectors' => [
                                     'input' => '#'.$input_id,
                                     'container' => '#'.$input_id.'-container',
-                                    'validation_id' => $input_id
+
                                 ],
                                 'options' => [
                                     'id' => $input_id.'-container',
+                                    'validation_id' => $input_id
                                 ]
                             ])->textInput([
                                 'name' => $input_name,
@@ -67,7 +78,10 @@ $juncture_identifier_shortname = strtolower($juncture_model->formName());
                         </td>
                         <?php endforeach; ?>
                     </tr>
-                <?php endforeach; ?>
+                <?php 
+                endforeach;
+                // --- Reset the field class to the original since we are done repeating our fields
+                $form->fieldClass = $original_field_class; ?>
                 </tbody>
             </table>
         </div>
