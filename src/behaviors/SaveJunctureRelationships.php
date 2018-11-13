@@ -4,6 +4,8 @@ namespace bvb\juncture\behaviors;
 
 use yii\db\BaseActiveRecord;
 use yii\helpers\Html;
+use yii\helpers\Inflector;
+use yii\base\InvalidConfigException;
 use yii\web\BadRequestHttpException;
 
 /**
@@ -25,10 +27,14 @@ use yii\web\BadRequestHttpException;
  *       'class' => SaveJunctureRelationships::className(),
  *       'relationships' => [
  *           [
+ *               // --- These fields are required
+ *               'juncture_model' => CardBenefit::className(), // --- Name of the relationship for the model this has a many to many relationship with
+ *               'related_model' => Benefit::className(), // --- Name of the relationship for the model this has a many to many relationship with
+ *                 
+ *               // --- These fields are optional and will attempt to be automatically determined based on the above two values
  *               'relation_name' => 'benefits', // --- Name of the relationship for the model this has a many to many relationship with
  *               'related_ids_attribute' => 'benefit_ids', // -- Name of the attribute on the this that holds the ids of the related records
  *               'juncture_relation_name' => 'cardBenefits', // --- Name of the relationship to the juncture table
- *               'juncture_model_name' => CardBenefit::className(), // --- Class name of the juncture model
  *               'related_id_attribute_in_juncture_table' => 'benefit_id', // --- Name of the related model's id field in the juncture table
  *               'owner_id_attribute_in_juncture_table' => 'card_id' // --- Name of this model's id field in the juncture table
  *               'additional_juncture_data_attribute' => 'benefits_data', // --- Optional if we have additional attributes on the juncture table
@@ -62,6 +68,62 @@ class SaveJunctureRelationships extends \yii\base\Behavior
     }
 
     /**
+     * {@inheritdoc}
+     */
+    public function attach($owner){
+        parent::attach($owner);
+        foreach($this->relationships as &$relationship_data){
+            $this->validateRelationConfig($relationship_data);
+        }
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function validateRelationConfig()
+    {
+        // --- Loop through all set up relations and ensure they are correctly configured and set defaults
+        foreach($this->relationships as &$relationship_data){
+            // --- Check for required configuration
+            if(!isset($relationship_data['juncture_model'])){
+                throw new InvalidConfigException('The `juncture_model` key must be set in the relationship data');
+            }
+            if(!isset($relationship_data['related_model'])){
+                throw new InvalidConfigException('The `related_model` key must be set in the relationship data');
+            }
+
+            $this->applyDefaults($relationship_data);
+        }
+    }
+
+    /**
+     * Applies some default values to the relationship data if those values are not set
+     * @param array $relationship_data
+     */
+    private function applyDefaults(&$relationship_data)
+    {
+        if(!isset($relationship_data['related_ids_attribute'])){
+            $relationship_data['related_ids_attribute'] = ($relationship_data['related_model']::tableName()).'_ids';
+        }
+
+        if(!isset($relationship_data['relation_name'])){
+            $relationship_data['relation_name'] = lcfirst(Inflector::pluralize(Inflector::id2camel($relationship_data['related_model']::tableName(), '_')));
+        }
+
+        if(!isset($relationship_data['juncture_relation_name'])){
+            $relationship_data['juncture_relation_name'] = lcfirst(Inflector::pluralize(Inflector::id2camel($relationship_data['juncture_model']::tableName(), '_')));
+        }
+
+        if(!isset($relationship_data['related_id_attribute_in_juncture_table'])){
+            $relationship_data['related_id_attribute_in_juncture_table'] = ($relationship_data['related_model']::tableName()).'_id';
+        }
+
+        if(!isset($relationship_data['owner_id_attribute_in_juncture_table'])){
+            $relationship_data['owner_id_attribute_in_juncture_table'] = $this->owner->tableName().'_id';
+        }
+    }
+
+    /**
      * Populates original data for juncture relationships so we can see what to add/delete/update after save
      * @return void
      */
@@ -84,7 +146,6 @@ class SaveJunctureRelationships extends \yii\base\Behavior
         }
     }
 
-
     /**
      * Changes any array data from juncture relationships with extra data into a corresponding model
      * The idea here is that when we POST the data it gets assigned to the model's property in array form
@@ -98,7 +159,7 @@ class SaveJunctureRelationships extends \yii\base\Behavior
         foreach($this->relationships as &$relationship_data){
             if(isset($relationship_data['additional_juncture_data_attribute'])){
                 foreach($this->owner->{$relationship_data['additional_juncture_data_attribute']} as $juncture_relationship_id => $additional_juncture_data_array){
-                    $juncture_model = new $relationship_data['juncture_model_name'];
+                    $juncture_model = new $relationship_data['juncture_model'];
                     $juncture_model->attributes = $additional_juncture_data_array;
                     // --- Make sure to assign the id of this model
                     // --- The primary key returns an array so we may eventually need a todo to handle composite keys - but this is a juncture table so handling a composite key other model in a table with a composite key is complicated and hopefully is never run into
@@ -183,7 +244,7 @@ class SaveJunctureRelationships extends \yii\base\Behavior
      */
     private function saveNewJunctureRelationship($relationship_data, $related_id_to_add)
     {
-        $juncture_model = new $relationship_data['juncture_model_name'];
+        $juncture_model = new $relationship_data['juncture_model'];
         $juncture_model->{$relationship_data['owner_id_attribute_in_juncture_table']} = $this->owner->id;
         $juncture_model->{$relationship_data['related_id_attribute_in_juncture_table']} = $related_id_to_add;
 
