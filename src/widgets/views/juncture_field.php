@@ -8,7 +8,7 @@ $juncture_identifier_shortname = strtolower($juncture_model->formName());
 ?>
 
     <div id="<?= $juncture_identifier_shortname; ?>-container" class="juncture-with-extra-data-container">
-        <?= $form->field($model, $related_ids_attribute)->widget(Select2::className(), [
+        <?= $form->field($model, $related_ids_attribute, ['template' => '{input}{error}'])->widget(Select2::className(), [
             'model' => $model,
             'attribute' => $related_ids_attribute,
             'data' => $data_list,
