@@ -86,7 +86,7 @@ class JunctureField extends InputWidget
                         }
 
                         if($this->juncture_model === null){
-                            $this->juncture_model = new $relationship_data['juncture_model_name'];
+                            $this->juncture_model = new $relationship_data['juncture_model'];
                         }
                     }
                 }
