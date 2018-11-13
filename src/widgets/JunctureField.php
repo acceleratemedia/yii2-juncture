@@ -154,7 +154,7 @@ $("#{$field_id}").on("select2:select", function(e){
         additional_juncture_data_attribute: "{$this->additional_juncture_data_attribute}",
         related_id_attribute_in_juncture_table: "{$this->related_id_attribute_in_juncture_table}",
         juncture_identifier_shortname: "{$juncture_identifier_shortname}",
-        model_id : {$this->model->id},
+        model_id : "{$this->model->id}",
         owner_id_attribute_in_juncture_table: "{$this->owner_id_attribute_in_juncture_table}",
         selected_data: e.params.data,
         attribute_config_data: {$fields_config_json}
