@@ -1,0 +1,32 @@
+{
+    "name": "brianvb/yii2-juncture",
+    "description": "Behavior and widgets for dealing with juncture relationships",
+    "type": "yii2-extension",
+    "require": {
+        "yiisoft/yii2-bootstrap4": "^1.0@dev",
+        "yiisoft/yii2": "2.0.15.1",
+    },
+    "require-dev": {
+        "codeception/codeception": "^2.0",
+        "codeception/specify": "^0.4",
+        "codeception/verify": "^0.3"
+    },
+    "authors": [
+        {
+            "name": "BrianVB",
+            "email": "vanburen.brian@gmail.com"
+        }
+    ],
+    "minimum-stability": "dev",
+    "autoload": {
+        "psr-4": {
+            "bvb\\juncture\\": "src"
+        }
+    },
+    "repositories": [
+        {
+            "type": "composer",
+            "url": "https://asset-packagist.org"
+        }
+    ]
+}
