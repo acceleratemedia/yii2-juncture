@@ -48,7 +48,7 @@ $juncture_identifier_shortname = strtolower($juncture_model->formName());
                             $input_name = $model_form_name.'['.$additional_juncture_data_prop.']['.$juncture_model->{$related_id_attribute_in_juncture_table}.']['.$juncture_attribute_data['attribute'].']';
                         ?>
                         <td>
-                            <?php if($juncture_attribute_data['input'] == 'dropDownList'): ?>
+                            <?php if($juncture_attribute_data['input'] == 'dropdownList'): ?>
                             <?= $form->field($juncture_model, $juncture_attribute_data['attribute'], [
                                 'template' => '{input}{error}',
                                 'options' => [
