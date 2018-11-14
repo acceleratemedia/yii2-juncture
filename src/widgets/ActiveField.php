@@ -4,7 +4,7 @@ namespace bvb\juncture\widgets;
 /**
  * Widget uses the Select2 plugin to implement a UI for juncture relationships
  */
-class ActiveField extends \yii\widgets\ActiveField
+class ActiveField extends \yii\bootstrap4\ActiveField
 {
     /**
      * {@inheritdoc}
