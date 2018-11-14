@@ -277,11 +277,25 @@ JS;
      */
     private function getNewInput($juncture_attribute_data)
     {
+        // --- Set up the default ActiveField instance
+        $field_default = $this->form->field($this->juncture_model, $juncture_attribute_data['attribute'], ['template'=>'{input}{error}', 'enableClientValidation'=>false]);
+
+        // --- Some default for the field
+        $field_attributes = [
+            'id' => null // --- This will be set in the javascript that generates the new fields so leave it blanke
+        ];
+
+        // --- Apply a default value if one is set
+        if(isset($juncture_attribute_data['default_value'])){
+            $this->juncture_model->{$juncture_attribute_data['attribute']} = $juncture_attribute_data['default_value'];
+        }
+
+        // --- Return the input based on the type
         switch($juncture_attribute_data['input']){
             case 'textInput':
-                return $this->form->field($this->juncture_model, $juncture_attribute_data['attribute'], ['template'=>'{input}{error}', 'enableClientValidation'=>false])->textInput(['id'=>null])->render();
+                return $field_default->textInput($field_attributes)->render();
             case 'dropdownList': 
-                return null;
+                return $field_default->dropDownList($juncture_attribute_data['data'], $field_attributes)->render();
         }
     }
 }
