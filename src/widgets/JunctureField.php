@@ -170,6 +170,7 @@ class JunctureField extends InputWidget
         $juncture_identifier_shortname = strtolower($this->juncture_model->formName());
 
         // --- The javascript going into document.ready is specific to this instance
+        $model_identifier = $this->model->{$this->model->primaryKey()[0]};
         $ready_js = <<<JS
 $("[data-toggle=tooltip]").tooltip({placement: "auto"});
 $("#{$field_id}").on("select2:select", function(e){
@@ -179,7 +180,7 @@ $("#{$field_id}").on("select2:select", function(e){
         additional_juncture_data_prop: "{$this->additional_juncture_data_prop}",
         related_id_attribute_in_juncture_table: "{$this->related_id_attribute_in_juncture_table}",
         juncture_identifier_shortname: "{$juncture_identifier_shortname}",
-        model_id : "{$this->model->primaryKey()}",
+        model_id : "{$model_identifier}",
         owner_id_attribute_in_juncture_table: "{$this->owner_id_attribute_in_juncture_table}",
         selected_data: e.params.data,
         attribute_config_data: {$fields_config_json}
@@ -188,7 +189,7 @@ $("#{$field_id}").on("select2:select", function(e){
 
 $("#{$field_id}").on("select2:unselect", function(e){
     var data = e.params.data;
-    $("#{$juncture_identifier_shortname}-table tbody tr#{$this->owner_id_attribute_in_juncture_table}-{$this->model->primaryKey()}-{$this->related_id_attribute_in_juncture_table}-"+data.id).remove();
+    $("#{$juncture_identifier_shortname}-table tbody tr#{$this->owner_id_attribute_in_juncture_table}-{$model_identifier}-{$this->related_id_attribute_in_juncture_table}-"+data.id).remove();
 });
 JS;
         $this->getView()->registerJs($ready_js);
