@@ -37,7 +37,7 @@ use yii\web\BadRequestHttpException;
  *               'juncture_relation_name' => 'cardBenefits', // --- Name of the relationship to the juncture table
  *               'related_id_attribute_in_juncture_table' => 'benefit_id', // --- Name of the related model's id field in the juncture table
  *               'owner_id_attribute_in_juncture_table' => 'card_id' // --- Name of this model's id field in the juncture table
- *               'additional_juncture_data_attribute' => 'benefits_data', // --- Optional if we have additional attributes on the juncture table
+ *               'additional_juncture_data_prop' => 'benefits_data', // --- Optional if we have additional attributes on the juncture table
  *               'additional_juncture_attributes' => [ // --- Optional name of additional attributes in the juncture table
  *                  'compares'
  *               ]
@@ -72,6 +72,9 @@ class SaveJunctureRelationships extends \yii\base\Behavior
      */
     public function attach($owner){
         parent::attach($owner);
+        if(empty($this->relationships)){
+            throw new InvalidConfigException('Relationships must be configred for SaveJunctureRelationships behavior to work');
+        }
         foreach($this->relationships as &$relationship_data){
             $this->validateRelationConfig($relationship_data);
         }
@@ -121,6 +124,13 @@ class SaveJunctureRelationships extends \yii\base\Behavior
         if(!isset($relationship_data['owner_id_attribute_in_juncture_table'])){
             $relationship_data['owner_id_attribute_in_juncture_table'] = $this->owner->tableName().'_id';
         }
+
+        // --- If they have additional juncture data attributes set then let's imlpement more defaults
+        if(isset($relationship_data['additional_juncture_attributes'])){
+            if(!isset($relationship_data['additional_juncture_data_prop'])){
+                $relationship_data['additional_juncture_data_prop'] = $relationship_data['related_model']::tableName().'s_data';
+            }
+        }
     }
 
     /**
@@ -136,11 +146,11 @@ class SaveJunctureRelationships extends \yii\base\Behavior
                 $this->owner->{$relationship_data['related_ids_attribute']}[] = $juncture_model->{$relationship_data['related_id_attribute_in_juncture_table']};
             }
 
-            if(isset($relationship_data['additional_juncture_data_attribute'])){
+            if(isset($relationship_data['additional_juncture_data_prop'])){
                 $relationship_data['original_data'] = [];
                 foreach($this->owner->{$relationship_data['juncture_relation_name']} as $juncture_model){
                     $relationship_data['original_data'][$juncture_model->{$relationship_data['related_id_attribute_in_juncture_table']}]  = $juncture_model;
-                    $this->owner->{$relationship_data['additional_juncture_data_attribute']}[$juncture_model->{$relationship_data['related_id_attribute_in_juncture_table']}] = $juncture_model;
+                    $this->owner->{$relationship_data['additional_juncture_data_prop']}[$juncture_model->{$relationship_data['related_id_attribute_in_juncture_table']}] = $juncture_model;
                 }
             }
         }
@@ -157,14 +167,14 @@ class SaveJunctureRelationships extends \yii\base\Behavior
     public function beforeValidate()
     {
         foreach($this->relationships as &$relationship_data){
-            if(isset($relationship_data['additional_juncture_data_attribute'])){
-                foreach($this->owner->{$relationship_data['additional_juncture_data_attribute']} as $juncture_relationship_id => $additional_juncture_data_array){
+            if(isset($relationship_data['additional_juncture_data_prop'])){
+                foreach($this->owner->{$relationship_data['additional_juncture_data_prop']} as $juncture_relationship_id => $additional_juncture_data_array){
                     $juncture_model = new $relationship_data['juncture_model'];
                     $juncture_model->attributes = $additional_juncture_data_array;
                     // --- Make sure to assign the id of this model
                     // --- The primary key returns an array so we may eventually need a todo to handle composite keys - but this is a juncture table so handling a composite key other model in a table with a composite key is complicated and hopefully is never run into
                     $juncture_model->{$relationship_data['owner_id_attribute_in_juncture_table']} = $this->owner->{$this->owner->primaryKey()[0]};
-                    $this->owner->{$relationship_data['additional_juncture_data_attribute']}[$juncture_relationship_id] = $juncture_model;
+                    $this->owner->{$relationship_data['additional_juncture_data_prop']}[$juncture_relationship_id] = $juncture_model;
                 }
             }
         }
@@ -219,8 +229,8 @@ class SaveJunctureRelationships extends \yii\base\Behavior
             }
 
             // --- If there is additional data on the juncture relationship loop through them and check to see if we need to update anything
-            if(isset($relationship_data['additional_juncture_data_attribute'])){
-                foreach($this->owner->{$relationship_data['additional_juncture_data_attribute']} as $juncture_relationship_id => $juncture_relationship_model){
+            if(isset($relationship_data['additional_juncture_data_prop'])){
+                foreach($this->owner->{$relationship_data['additional_juncture_data_prop']} as $juncture_relationship_id => $juncture_relationship_model){
                     if(!in_array($juncture_relationship_id, $related_ids_to_add) && !in_array($juncture_relationship_id, $related_ids_to_remove)){
                         // --- If this was not an added or removed relationship then check with the original ones to see if it needs to be updated
                         foreach($relationship_data['original_data'] as $original_juncture_related_id => $original_juncture_relationship_model){
@@ -249,10 +259,10 @@ class SaveJunctureRelationships extends \yii\base\Behavior
         $juncture_model->{$relationship_data['related_id_attribute_in_juncture_table']} = $related_id_to_add;
 
         // --- If we have additional attributes in the juncture relationship we want to get those and save them
-        if(isset($relationship_data['additional_juncture_data_attribute_names'])){
+        if(isset($relationship_data['additional_juncture_attributes'])){
             // --- Loop through the attributes and get the values from POST and assign them
-            foreach($relationship_data['additional_juncture_data_attribute_names'] as $juncture_attribute_name){
-                $juncture_model->{$juncture_attribute_name} = $this->owner->{$relationship_data['additional_juncture_data_attribute']}[$related_id_to_add][$juncture_attribute_name];
+            foreach($relationship_data['additional_juncture_attributes'] as $juncture_attribute_name){
+                $juncture_model->{$juncture_attribute_name} = $this->owner->{$relationship_data['additional_juncture_data_prop']}[$related_id_to_add][$juncture_attribute_name];
             }
         }
         if(!$juncture_model->save()){

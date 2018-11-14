@@ -2,7 +2,9 @@
 namespace bvb\juncture\widgets;
 
 use bvb\juncture\behaviors\SaveJunctureRelationships;
+use yii\base\InvalidConfigException;
 use yii\helpers\Html;
+use yii\helpers\Inflector;
 use yii\helpers\Json;
 use yii\validators\Validator;
 use yii\web\JsExpression;
@@ -23,12 +25,12 @@ class JunctureField extends InputWidget
     /**
      * @var string
      */
-    public $relation_name_in_juncture_table;
+    public $relation_name_in_juncture_model;
 
     /**
      * @var string
      */
-    public $juncture_relation_display_attribute;
+    public $juncture_relation_display_attribute = 'name';
 
     /**
      * @var string
@@ -43,7 +45,7 @@ class JunctureField extends InputWidget
     /**
      * @var string
      */
-    public $additional_juncture_data_attribute;
+    public $additional_juncture_data_prop;
 
     /**
      * @var array
@@ -65,32 +67,55 @@ class JunctureField extends InputWidget
      */
     public function init()
     {
-        // --- Just for setting up some defaults
-        foreach($this->model->behaviors as $behavior){
-            // --- Check to see if the behavior for saving juncture relationships is attached
-            if($behavior::className() == SaveJunctureRelationships::className()){
-                // --- Loop through the set up relationships to see if this widget is for the specified relationship
-                foreach($behavior->relationships as $relationship_data){
-                    // --- Use some default settings if we have null values
-                    if($relationship_data['related_ids_attribute'] == $this->attribute){
-                        if($this->owner_id_attribute_in_juncture_table === null){
-                            $this->owner_id_attribute_in_juncture_table = $relationship_data['owner_id_attribute_in_juncture_table'];
-                        }
+        $juncture_behavior_attached = false;
+        if($this->model->behaviors !== null){
+            // --- Just for setting up some defaults
+            foreach($this->model->behaviors as $behavior){
+                // --- Check to see if the behavior for saving juncture relationships is attached
+                if($behavior::className() == SaveJunctureRelationships::className()){
+                    $juncture_behavior_attached = true;
+                    // --- Loop through the set up relationships to see if this widget is for the specified relationship
+                    foreach($behavior->relationships as $relationship_data){
+                        // --- Check to see if this widget is for the attribute in this set of relationship data
+                        if($relationship_data['related_ids_attribute'] == $this->attribute){
+                            // --- Set some defaults based on the behavior if they are not specificied in the instantiation of this widget
+                            if($this->owner_id_attribute_in_juncture_table === null){
+                                $this->owner_id_attribute_in_juncture_table = $relationship_data['owner_id_attribute_in_juncture_table'];
+                            }
 
-                        if($this->related_id_attribute_in_juncture_table === null){
-                            $this->related_id_attribute_in_juncture_table = $relationship_data['related_id_attribute_in_juncture_table'];
-                        }
+                            if($this->related_id_attribute_in_juncture_table === null){
+                                $this->related_id_attribute_in_juncture_table = $relationship_data['related_id_attribute_in_juncture_table'];
+                            }
 
-                        if($this->additional_juncture_data_attribute === null){
-                            $this->additional_juncture_data_attribute = $relationship_data['additional_juncture_data_attribute'];
-                        }
+                            if($this->additional_juncture_data_prop === null){
+                                $this->additional_juncture_data_prop = $relationship_data['additional_juncture_data_prop'];
+                            }
 
-                        if($this->juncture_model === null){
-                            $this->juncture_model = new $relationship_data['juncture_model'];
+                            if($this->juncture_model === null){
+                                $this->juncture_model = new $relationship_data['juncture_model'];
+                            }
+
+                            if($this->juncture_attributes === null){
+                                foreach($relationship_data['additional_juncture_attributes'] as $attribute_name){
+                                    // --- Default configuration is to use all juncture attributes as a text input
+                                    $this->juncture_attributes[] = [
+                                        'attribute' => $attribute_name,
+                                        'input' => 'textInput'
+                                    ];
+                                }
+                            }
+
+                            if($this->relation_name_in_juncture_model === null){
+                                $this->relation_name_in_juncture_model = lcfirst((new \ReflectionClass($relationship_data['related_model']))->getShortName());
+                            }
                         }
                     }
                 }
-            }
+            }   
+        }
+
+        if(!$juncture_behavior_attached){
+            throw new InvalidConfigException('The behavior '.SaveJunctureRelationships::className().' must be attached to '.$this->model->className().' for the juncture input widget to work');
         }
     }
 
@@ -105,11 +130,11 @@ class JunctureField extends InputWidget
             'form' => $this->form,
             'model' => $this->model,
             'related_ids_attribute' => $this->attribute,
-            'relation_name_in_juncture_table' => $this->relation_name_in_juncture_table,
+            'relation_name_in_juncture_model' => $this->relation_name_in_juncture_model,
             'juncture_relation_display_attribute' => $this->juncture_relation_display_attribute,
             'owner_id_attribute_in_juncture_table' => $this->owner_id_attribute_in_juncture_table,
             'related_id_attribute_in_juncture_table' => $this->related_id_attribute_in_juncture_table,
-            'additional_juncture_data_attribute' => $this->additional_juncture_data_attribute,
+            'additional_juncture_data_prop' => $this->additional_juncture_data_prop,
             'data_list' => $this->data_list,
             'juncture_model' => $this->juncture_model,
             'juncture_attributes' => $this->juncture_attributes
@@ -151,10 +176,10 @@ $("#{$field_id}").on("select2:select", function(e){
     addNewJunctureData({
         model_form_name: "{$this->model->formName()}",
         form_id: "#{$this->form->id}",
-        additional_juncture_data_attribute: "{$this->additional_juncture_data_attribute}",
+        additional_juncture_data_prop: "{$this->additional_juncture_data_prop}",
         related_id_attribute_in_juncture_table: "{$this->related_id_attribute_in_juncture_table}",
         juncture_identifier_shortname: "{$juncture_identifier_shortname}",
-        model_id : "{$this->model->id}",
+        model_id : "{$this->model->primaryKey()}",
         owner_id_attribute_in_juncture_table: "{$this->owner_id_attribute_in_juncture_table}",
         selected_data: e.params.data,
         attribute_config_data: {$fields_config_json}
@@ -163,7 +188,7 @@ $("#{$field_id}").on("select2:select", function(e){
 
 $("#{$field_id}").on("select2:unselect", function(e){
     var data = e.params.data;
-    $("#{$juncture_identifier_shortname}-table tbody tr#{$this->owner_id_attribute_in_juncture_table}-{$this->model->id}-{$this->related_id_attribute_in_juncture_table}-"+data.id).remove();
+    $("#{$juncture_identifier_shortname}-table tbody tr#{$this->owner_id_attribute_in_juncture_table}-{$this->model->primaryKey()}-{$this->related_id_attribute_in_juncture_table}-"+data.id).remove();
 });
 JS;
         $this->getView()->registerJs($ready_js);
@@ -192,7 +217,7 @@ function addNewJunctureData(config)
     // --- Create a hidden input with the id of the juncture related model
     var hidden_input = $("<input>").attr({
         type: "hidden",
-        name: config.model_form_name+"["+config.additional_juncture_data_attribute+"]["+data.id+"]["+config.related_id_attribute_in_juncture_table+"]",
+        name: config.model_form_name+"["+config.additional_juncture_data_prop+"]["+data.id+"]["+config.related_id_attribute_in_juncture_table+"]",
         id: config.juncture_identifier_shortname+"-"+config.related_id_attribute_in_juncture_table+"-"+data.id,
         value: data.id
     });
@@ -218,7 +243,7 @@ function addNewJunctureData(config)
 
         // --- Update the name of the new input to include the id of the juncture relation
         var new_input_id = config. juncture_identifier_shortname+"-"+attribute_config_data.attribute+"-"+data.id;;
-        var new_input_name = config.model_form_name+"["+config.additional_juncture_data_attribute+"]["+data.id+"]["+attribute_config_data.attribute+"]";
+        var new_input_name = config.model_form_name+"["+config.additional_juncture_data_prop+"]["+data.id+"]["+attribute_config_data.attribute+"]";
         $("select, input", new_input)
             .attr("name", new_input_name)
             .attr("id", new_input_id);

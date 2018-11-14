@@ -30,14 +30,14 @@ $juncture_identifier_shortname = strtolower($juncture_model->formName());
                 // --- Very important to use our activefield for custom validation ids on these repeating juncture records
                 $original_field_class = $form->fieldClass;
                 $form->fieldClass = '\bvb\juncture\widgets\ActiveField';
-                foreach($model->{$additional_juncture_data_attribute} as $juncture_model): ?>
+                foreach($model->{$additional_juncture_data_prop} as $juncture_model): ?>
                     <tr id="<?= $owner_id_attribute_in_juncture_table; ?>-<?= $juncture_model->{$owner_id_attribute_in_juncture_table}; ?>-<?= $related_id_attribute_in_juncture_table; ?>-<?= $juncture_model->{$related_id_attribute_in_juncture_table}; ?>">
                         <td>
                             <?= Html::activeHiddenInput($juncture_model, $related_id_attribute_in_juncture_table, [
-                                    'name' => $model_form_name.'['.$additional_juncture_data_attribute.']['.$juncture_model->{$related_id_attribute_in_juncture_table}.']['.$related_id_attribute_in_juncture_table.']',
+                                    'name' => $model_form_name.'['.$additional_juncture_data_prop.']['.$juncture_model->{$related_id_attribute_in_juncture_table}.']['.$related_id_attribute_in_juncture_table.']',
                                     'id' => Html::getInputId($juncture_model, $related_id_attribute_in_juncture_table).'-'.$juncture_model->{$related_id_attribute_in_juncture_table}
                             ]); ?>
-                            <?= $juncture_model->{$relation_name_in_juncture_table}->{$juncture_relation_display_attribute}; ?>
+                            <?= $juncture_model->{$relation_name_in_juncture_model}->{$juncture_relation_display_attribute}; ?>
                         </td>
                         <?php
 
@@ -45,7 +45,7 @@ $juncture_identifier_shortname = strtolower($juncture_model->formName());
                         // --- Loop through all juncture atrtibtues
                         foreach($juncture_attributes as $juncture_attribute_data): // --- Renders the existing values
                             $input_id = Html::getInputId($juncture_model, $juncture_attribute_data['attribute']).'-'.$juncture_model->{$related_id_attribute_in_juncture_table};
-                            $input_name = $model_form_name.'['.$additional_juncture_data_attribute.']['.$juncture_model->{$related_id_attribute_in_juncture_table}.']['.$juncture_attribute_data['attribute'].']';
+                            $input_name = $model_form_name.'['.$additional_juncture_data_prop.']['.$juncture_model->{$related_id_attribute_in_juncture_table}.']['.$juncture_attribute_data['attribute'].']';
                         ?>
                         <td>
                             <?php if($juncture_attribute_data['input'] == 'dropDownList'): ?>
