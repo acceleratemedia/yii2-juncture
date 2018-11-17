@@ -2,6 +2,7 @@
 namespace bvb\juncture\widgets;
 
 use bvb\juncture\behaviors\SaveJunctureRelationships;
+use kartik\date\DatePicker;
 use yii\base\InvalidConfigException;
 use yii\helpers\Html;
 use yii\helpers\Inflector;
@@ -17,6 +18,13 @@ use Yii;
  */
 class JunctureField extends InputWidget
 {
+    /**
+     * @const string Constants used to indicate the field type
+     */
+    const INPUT_TEXT = 'textInput';
+    const INPUT_DROPDOWN = 'dropdownList';
+    const INPUT_DATEPICKER = 'datepicker';
+
     /**
      * @var \yii\widgets\ActiveForm
      */
@@ -63,6 +71,11 @@ class JunctureField extends InputWidget
     public $juncture_attributes;
 
     /**
+     * @var string
+     */
+    public $default_input = self::INPUT_TEXT;
+
+    /**
      * {@inheritdoc}
      */
     public function init()
@@ -100,7 +113,7 @@ class JunctureField extends InputWidget
                                     // --- Default configuration is to use all juncture attributes as a text input
                                     $this->juncture_attributes[] = [
                                         'attribute' => $attribute_name,
-                                        'input' => 'textInput'
+                                        'input' => $this->default_input
                                     ];
                                 }
                             }
@@ -293,10 +306,18 @@ JS;
 
         // --- Return the input based on the type
         switch($juncture_attribute_data['input']){
-            case 'textInput':
+            case self::INPUT_TEXT:
                 return $field_default->textInput($field_attributes)->render();
-            case 'dropdownList': 
-                return $field_default->dropDownList($juncture_attribute_data['data'], $field_attributes)->render();
+            case self::INPUT_DROPDOWN: 
+                return $field_default->dropdownList($juncture_attribute_data['data'], $field_attributes)->render();
+            case self::INPUT_DATEPICKER:
+                return $field_default->widget(DatePicker::classname(), [
+                    'pluginOptions' => [
+                        'autoclose' => true,
+                        'format' => 'yyyy-mm-dd'
+                    ]
+                ])->render();
+            default: 
         }
     }
 }

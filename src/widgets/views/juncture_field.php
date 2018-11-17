@@ -1,5 +1,7 @@
 <?php
 
+use bvb\juncture\widgets\JunctureField;
+use kartik\date\DatePicker;
 use kartik\select2\Select2;
 use yii\helpers\Html;
 
@@ -44,37 +46,44 @@ $juncture_identifier_shortname = strtolower($juncture_model->formName());
 
                         // --- Loop through all juncture atrtibtues
                         foreach($juncture_attributes as $juncture_attribute_data): // --- Renders the existing values
+                            // --- Get a unique id and name for each based on juncture relationships
                             $input_id = Html::getInputId($juncture_model, $juncture_attribute_data['attribute']).'-'.$juncture_model->{$related_id_attribute_in_juncture_table};
                             $input_name = $model_form_name.'['.$additional_juncture_data_prop.']['.$juncture_model->{$related_id_attribute_in_juncture_table}.']['.$juncture_attribute_data['attribute'].']';
-                        ?>
-                        <td>
-                            <?php if($juncture_attribute_data['input'] == 'dropdownList'): ?>
-                            <?= $form->field($juncture_model, $juncture_attribute_data['attribute'], [
-                                'template' => '{input}{error}',
-                                'options' => [
-                                    'validation_id' => $input_id  // --- Customized so we can validate each attribute individually
-                                ],
-                            ])->dropDownList($juncture_attribute_data['data'], [
-                                'name' => $input_name,
-                                'id' => $input_id
-                            ]);?>
-                            <?php else: ?>
-                            <?= $form->field($juncture_model, $juncture_attribute_data['attribute'], [
+
+                            // --- Set some defaults for the activefield
+                            $active_field_default = $form->field($juncture_model, $juncture_attribute_data['attribute'], [
                                 'template' => '{input}{error}',
                                 'selectors' => [
                                     'input' => '#'.$input_id,
                                     'container' => '#'.$input_id.'-container',
-
                                 ],
                                 'options' => [
                                     'id' => $input_id.'-container',
                                     'validation_id' => $input_id
                                 ]
-                            ])->textInput([
+                            ]);
+
+                            $input_options_defaults = [
                                 'name' => $input_name,
                                 'id' => $input_id
-                            ]);?>
-                            <?php endif; ?>
+                            ];
+                        ?>
+                        <td>
+                            <?php 
+                            if($juncture_attribute_data['input'] == JunctureField::INPUT_DROPDOWN){
+                                echo $active_field_default->dropDownList($juncture_attribute_data['data'], $input_options_defaults);
+                            } elseif($juncture_attribute_data['input'] == JunctureField::INPUT_TEXT){
+                                echo $active_field_default->textInput($input_options_defaults);
+                            } elseif($juncture_attribute_data['input'] == JunctureField::INPUT_DATEPICKER){
+                                echo $active_field_default->widget(DatePicker::classname(), [
+                                    'options' => $input_options_defaults,
+                                    'pluginOptions' => [
+                                        'autoclose' => true,
+                                        'format' => 'yyyy-mm-dd'
+                                    ]
+                                ]);
+                            }
+                            ?>
                         </td>
                         <?php endforeach; ?>
                     </tr>
