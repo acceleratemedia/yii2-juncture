@@ -2,7 +2,8 @@
 namespace bvb\juncture\widgets;
 
 /**
- * Widget uses the Select2 plugin to implement a UI for juncture relationships
+ * Custom implementation of ActiveField so that we can assign a validation id
+ * to separately validate the same field on different models on the same ui
  */
 class ActiveField extends \yii\bootstrap4\ActiveField
 {
