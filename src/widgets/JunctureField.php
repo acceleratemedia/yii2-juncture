@@ -160,13 +160,21 @@ class JunctureField extends InputWidget
     private function registerJunctureUiJs()
     {
         // --- Loop through all juncture attributes to get fields configuration data
-        $fields_config_data = [];
+        $fields_config_data = []; // --- Holds the special configuration for each new field being added
+        $callbacks = []; // --- Holds a callback for each field requires one
         foreach($this->juncture_attributes as $juncture_attribute_data){
             // --- Loop through validators on this attribute so we can create js validation for each attribute
             $validation_strs = [];
             $validators = $this->juncture_model->getActiveValidators($juncture_attribute_data['attribute']);
             foreach($validators as $validator){
                 $validation_strs[] = $validator->clientValidateAttribute($this->juncture_model, $juncture_attribute_data['attribute'], $this->getView());
+            }
+
+            // --- If the juncture attribute has an input that requires a callback to initialize, set it
+            if($juncture_attribute_data['input'] == self::INPUT_DATEPICKER){
+                // --- If there is a datepicker destroy instances of it and re-initialize so the new input has it working
+                // --- Not sure if doing this by the input type is the best decision but for now it seems that way
+                $callbacks[self::INPUT_DATEPICKER] = new JsExpression('$(".krajee-datepicker").kvDatepicker("destroy");$(".krajee-datepicker").kvDatepicker({"autoclose":true,"format":"yyyy-mm-dd"});');
             }
 
             // --- Set up the config for this field which will be used in the javascript
@@ -182,6 +190,9 @@ class JunctureField extends InputWidget
         $field_id = Html::getInputId($this->model, $this->attribute);
         $juncture_identifier_shortname = strtolower($this->juncture_model->formName());
 
+        // --- Set up a callback function each time a new record is added consisting of all of the
+        $callback = (!empty($callbacks)) ? 'function(){'.implode($callbacks, '').'}' : null;
+
         // --- The javascript going into document.ready is specific to this instance
         $model_identifier = $this->model->{$this->model->primaryKey()[0]};
         $ready_js = <<<JS
@@ -196,7 +207,8 @@ $("#{$field_id}").on("select2:select", function(e){
         model_id : "{$model_identifier}",
         owner_id_attribute_in_juncture_table: "{$this->owner_id_attribute_in_juncture_table}",
         selected_data: e.params.data,
-        attribute_config_data: {$fields_config_json}
+        attribute_config_data: {$fields_config_json},
+        callback: {$callback}
     })
 });
 
@@ -219,7 +231,6 @@ function validateNewDynamicField(config)
         error: ".invalid-feedback",
         validate:  config.validator
     };
-    console.log(validation_config);
     $(config.form_id).yiiActiveForm("add", validation_config);  
 }
 
@@ -248,9 +259,7 @@ function addNewJunctureData(config)
 
     // --- Append all of the juncture fields that need input to the row
     $.each(config.attribute_config_data, function(idx, attribute_config_data){
-        console.log(attribute_config_data);
         var new_input = $(attribute_config_data.new_input);
-        console.log(new_input);
         // --- Update the container of the new input to specify the id of the juncture relation
         var new_input_container_class = new_input.attr("class")+"-"+data.id;
         $(new_input).attr("class", new_input_container_class);
@@ -278,6 +287,11 @@ function addNewJunctureData(config)
 
     // --- Append the new row to the table
     $("#"+config.juncture_identifier_shortname+"-table tbody").append(new_row);
+
+    // --- Run the callback if there is one
+    if(config.callback){
+        config.callback();
+    }
 }
 JS;
 
@@ -311,7 +325,9 @@ JS;
             case self::INPUT_DROPDOWN: 
                 return $field_default->dropdownList($juncture_attribute_data['data'], $field_attributes)->render();
             case self::INPUT_DATEPICKER:
+                $field_attributes['class'] = 'test123';
                 return $field_default->widget(DatePicker::classname(), [
+                    'options' => $field_attributes,
                     'pluginOptions' => [
                         'autoclose' => true,
                         'format' => 'yyyy-mm-dd'
