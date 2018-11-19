@@ -186,7 +186,6 @@ class JunctureField extends InputWidget
         }
 
         // --- Prepare some fields we can use in the javascript
-        $fields_config_json = Json::encode($fields_config_data);
         $field_id = Html::getInputId($this->model, $this->attribute);
         $juncture_identifier_shortname = strtolower($this->juncture_model->formName());
 
@@ -195,21 +194,27 @@ class JunctureField extends InputWidget
 
         // --- The javascript going into document.ready is specific to this instance
         $model_identifier = $this->model->{$this->model->primaryKey()[0]};
+
+        // --- Set up the configuraiton used when adding a new field
+        $new_juncture_data_config = [
+            'model_form_name' => $this->model->formName(),
+            'form_id' => '#'.$this->form->id,
+            'additional_juncture_data_prop' => $this->additional_juncture_data_prop,
+            'related_id_attribute_in_juncture_table' => $this->related_id_attribute_in_juncture_table,
+            'juncture_identifier_shortname' => $juncture_identifier_shortname,
+            'model_id' => $model_identifier,
+            'owner_id_attribute_in_juncture_table' => $this->owner_id_attribute_in_juncture_table,
+            'selected_data' => new JsExpression('e.params.data'), // --- 'e' refers to the event of the select2 plugin
+            'attribute_config_data' => $fields_config_data,
+            'callback' => ($callback) ? new JsExpression($callback) : null
+        ];
+
+        $new_juncture_data_config_json = Json::encode($new_juncture_data_config);
+
         $ready_js = <<<JS
 $("[data-toggle=tooltip]").tooltip({placement: "auto"});
 $("#{$field_id}").on("select2:select", function(e){
-    addNewJunctureData({
-        model_form_name: "{$this->model->formName()}",
-        form_id: "#{$this->form->id}",
-        additional_juncture_data_prop: "{$this->additional_juncture_data_prop}",
-        related_id_attribute_in_juncture_table: "{$this->related_id_attribute_in_juncture_table}",
-        juncture_identifier_shortname: "{$juncture_identifier_shortname}",
-        model_id : "{$model_identifier}",
-        owner_id_attribute_in_juncture_table: "{$this->owner_id_attribute_in_juncture_table}",
-        selected_data: e.params.data,
-        attribute_config_data: {$fields_config_json},
-        callback: {$callback}
-    })
+    addNewJunctureData({$new_juncture_data_config_json})
 });
 
 $("#{$field_id}").on("select2:unselect", function(e){
@@ -325,7 +330,6 @@ JS;
             case self::INPUT_DROPDOWN: 
                 return $field_default->dropdownList($juncture_attribute_data['data'], $field_attributes)->render();
             case self::INPUT_DATEPICKER:
-                $field_attributes['class'] = 'test123';
                 return $field_default->widget(DatePicker::classname(), [
                     'options' => $field_attributes,
                     'pluginOptions' => [
