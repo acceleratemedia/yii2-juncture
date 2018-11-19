@@ -9,36 +9,40 @@ use yii\base\InvalidConfigException;
 use yii\web\BadRequestHttpException;
 
 /**
- * For saving the related models that represet a juncture relationship
+ * SaveJunctureRelationships is a behavior that can be attached to ActiveRecord models to save related data
+ * into a juncture table when saving data on the model itself . This also comes with JunctureField which is
+ * a widget that creates a UI using the Select2 jQuery plugin for setting related data
  *
- * There are several caveats to get this to work
- * 1) On the form, we should use a checkbox or multi-select and they should be set up so that if nothing is selected it passes through a non-array value
- * 2) The model needs to have an attribute on it which is an array of the ids of the related model in the many to many relationship
- * 3) The model needs to have a ActiveRecord relation set to the model it has a many to many relationship with AND to the juncture table
+ * Minimum Requirements:
+ * 1) The owner needs an attribute which is an array of the ids of the related model in the many
+ * to many relationship. Make sure this attribute can be massively assigned with proper validation rules.
+ * 2) The owner needs to have relations set to the model it has a many to many relationship with AND to the
+ * juncture table
  *
- * Also:
- * 1) This was written with the ability to save extra columns on juncture relationships if configured as directed in the example below
- *
- * Suggestions:
- * 1) Use Select2 as an frontend UI choice and booststrap 4
+ * This behavior can also be used to save juncture records with additional data. If this is desired, additional
+ * requirements are:
+ * 1) The owner needs an attribute which is an array for the additional data for each juncture that can be massively assigned
+ * with validation rules
  * 
- * Behaviors set up configuration must look like:
+ * Example configuration in behaviors():
  *   [
  *       'class' => SaveJunctureRelationships::className(),
  *       'relationships' => [
  *           [
- *               // --- These fields are required
- *               'juncture_model' => CardBenefit::className(), // --- Name of the relationship for the model this has a many to many relationship with
- *               'related_model' => Benefit::className(), // --- Name of the relationship for the model this has a many to many relationship with
+ *               // --- Required fields
+ *               'juncture_model' => CardBenefit::className(), // --- Model representing the juncture table
+ *               'related_model' => Benefit::className(), // --- Model of the related table
  *                 
- *               // --- These fields are optional and will attempt to be automatically determined based on the above two values
- *               'relation_name' => 'benefits', // --- Name of the relationship for the model this has a many to many relationship with
- *               'related_ids_attribute' => 'benefit_ids', // -- Name of the attribute on the this that holds the ids of the related records
- *               'juncture_relation_name' => 'cardBenefits', // --- Name of the relationship to the juncture table
- *               'related_id_attribute_in_juncture_table' => 'benefit_id', // --- Name of the related model's id field in the juncture table
- *               'owner_id_attribute_in_juncture_table' => 'card_id' // --- Name of this model's id field in the juncture table
- *               'additional_juncture_data_prop' => 'benefits_data', // --- Optional if we have additional attributes on the juncture table
- *               'additional_juncture_attributes' => [ // --- Optional name of additional attributes in the juncture table
+ *               // --- Optional fields; defaults will be set for these fields based on names of the owner, related, and juncture tables
+ *               'relation_name' => 'benefits', // --- Name of the AR relationship for the related model
+ *               'related_ids_attribute' => 'benefit_ids', // -- Name of the owner's attribute that holds the ids of related records
+ *               'juncture_relation_name' => 'cardBenefits', // --- Name of the AR relationship to the juncture model
+ *               'related_id_attribute_in_juncture_table' => 'benefit_id', // --- Name of the related table's id field in the juncture table
+ *               'owner_id_attribute_in_juncture_table' => 'card_id' // --- Name of the owner's id field in the juncture table
+ *
+ *               // --- Optional fields if additional data needs to be saved in the juncture records
+ *               'additional_juncture_data_prop' => 'benefits_data', // --- Name of the owner's attribute which holds additional data
+ *               'additional_juncture_attributes' => [ // --- Names of additional attributes with data that needs saving
  *                  'compares'
  *               ]
  *           ]
@@ -81,7 +85,7 @@ class SaveJunctureRelationships extends \yii\base\Behavior
     }
 
     /**
-     * {@inheritdoc}
+     * Validates the relationship data array
      */
     public function validateRelationConfig()
     {
