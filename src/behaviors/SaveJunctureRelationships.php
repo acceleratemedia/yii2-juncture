@@ -133,6 +133,9 @@ class SaveJunctureRelationships extends \yii\base\Behavior
         if(isset($relationship_data['additional_juncture_attributes'])){
             if(!isset($relationship_data['additional_juncture_data_prop'])){
                 $relationship_data['additional_juncture_data_prop'] = $relationship_data['related_model']::tableName().'s_data';
+                if(!isset($this->owner->{$relationship_data['additional_juncture_data_prop']})){
+                    throw new InvalidConfigException('The behavior for saving juncture relationships is attempting to use the default property for additional juncture data "'.$relationship_data['additional_juncture_data_prop'].'" but that property does not exist on the model. Please define a valid property  for "additional_juncture_data_prop" in behavior configuration');
+                }
             }
         }
     }
