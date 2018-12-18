@@ -282,14 +282,23 @@ function addNewJunctureData(config)
     // --- Append all of the juncture fields that need input to the row
     $.each(config.attribute_config_data, function(idx, attribute_config_data){
         var new_input = $(attribute_config_data.new_input);
-        // --- Update the container of the new input to specify the id of the juncture relation
-        var new_input_container_class = new_input.attr("class")+"-"+data.id;
-        $(new_input).attr("class", new_input_container_class);
+
+        // --- Update the "field" class used by Yii to add the ID to the end and update the
+        // --- class of the container of the new input to specify this
+        var new_input_container_classes = new_input.attr("class").split(/\s+/);
+        var new_classes = [];
+        $.each(new_input_container_classes, function(index, item){
+            if (item === "field-"+config.juncture_identifier_shortname+"-"+attribute_config_data.attribute) {
+                item += "-"+data.id;
+            }
+            new_classes.push(item)
+        });
+        $(new_input).attr("class", new_classes.join(" "));
 
         // --- Update the name of the new input to include the id of the juncture relation
-        var new_input_id = config. juncture_identifier_shortname+"-"+attribute_config_data.attribute+"-"+data.id;;
+        var new_input_id = config.juncture_identifier_shortname+"-"+attribute_config_data.attribute+"-"+data.id;;
         var new_input_name = config.model_form_name+"["+config.additional_juncture_data_prop+"]["+data.id+"]["+attribute_config_data.attribute+"]";
-        $("select, input", new_input)
+        $("select, input, textarea", new_input)
             .attr("name", new_input_name)
             .attr("id", new_input_id);
         var new_row_cell = $("<td></td>")
