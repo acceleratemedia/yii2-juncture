@@ -93,6 +93,12 @@ class JunctureField extends InputWidget
     public $default_input = self::INPUT_TEXT;
 
     /**
+     * A callback to be executed when a new juncture item is added
+     * @var string
+     */
+    public $new_item_callback;
+
+    /**
      * {@inheritdoc}
      */
     public function init()
@@ -179,6 +185,12 @@ class JunctureField extends InputWidget
         // --- Loop through all juncture attributes to get fields configuration data
         $fields_config_data = []; // --- Holds the special configuration for each new field being added
         $callbacks = []; // --- Holds a callback for each field requires one
+
+        // --- If we have an overall callback for after adding a new row then run it
+        if(!empty($this->new_item_callback)){
+            $callbacks[] = $this->new_item_callback;
+        }
+
         foreach($this->juncture_attributes as $juncture_attribute_data){
             // --- Loop through validators on this attribute so we can create js validation for each attribute
             $validation_strs = [];
@@ -272,7 +284,7 @@ function addNewJunctureData(config)
     // --- Create a label cell with the id field and the label
     var label_cell = $("<td></td>")
         .append(hidden_input)
-        .append(data.text);
+        .append("<span class=\"display-attribute\">"+data.text+"</span>");
 
     // --- Create a new row with the label cell
     var new_row = $("<tr></tr>")
@@ -343,6 +355,10 @@ JS;
         $field_attributes = [
             'id' => null // --- This will be set in the javascript that generates the new fields so leave it blanke
         ];
+
+        if(isset($juncture_attribute_data['inputOptions']) && !empty($juncture_attribute_data['inputOptions'])){
+            $field_attributes = array_merge($field_attributes, $juncture_attribute_data['inputOptions']);
+        }
 
         // --- Apply a default value if one is set
         if(isset($juncture_attribute_data['default_value'])){

@@ -41,7 +41,7 @@ $juncture_identifier_shortname = strtolower($juncture_model->formName());
                                     'name' => $model_form_name.'['.$additional_juncture_data_prop.']['.$juncture_model->{$related_id_attribute_in_juncture_table}.']['.$related_id_attribute_in_juncture_table.']',
                                     'id' => Html::getInputId($juncture_model, $related_id_attribute_in_juncture_table).'-'.$juncture_model->{$related_id_attribute_in_juncture_table}
                             ]); ?>
-                            <?= $juncture_model->{$relation_name_in_juncture_model}->{$juncture_relation_display_attribute}; ?>
+                            <span class="display-attribute"><?= $juncture_model->{$relation_name_in_juncture_model}->{$juncture_relation_display_attribute}; ?></span>
                         </td>
                         <?php
 
@@ -69,6 +69,10 @@ $juncture_identifier_shortname = strtolower($juncture_model->formName());
                                 'name' => $input_name,
                                 'id' => $input_id
                             ];
+
+                            if(!empty($juncture_attribute_data['inputOptions'])){
+                                $input_options_defaults = array_merge($input_options_defaults, $juncture_attribute_data['inputOptions']);
+                            }
                         ?>
                         <td>
                             <?php 
