@@ -31,6 +31,8 @@ use yii\web\BadRequestHttpException;
  *           [
  *               // --- Required fields
  *               'juncture_model' => CardBenefit::className(), // --- Model representing the juncture table
+ *
+ *              // --- Optional but can be used to determine the rest of the optional fields
  *               'related_model' => Benefit::className(), // --- Model of the related table
  *                 
  *               // --- Optional fields; defaults will be set for these fields based on names of the owner, related, and juncture tables
@@ -57,6 +59,15 @@ class SaveJunctureRelationships extends \yii\base\Behavior
      * @var array
      */
     public $relationships = [];
+
+    /**
+     * Holds juncture models for validating attributes exist. Only used if the owner does not have
+     * a related model already attached to it. Key is string classname of the juncture model
+     * we want for validating and value is the class itself. Need to array it because we can have multiple relationships
+     * on a single model and so might need multiple juncture models to validate attributes exist
+     * @var yii\db\ActiveRecord
+     */
+    private $_juncture_model_for_validating;
 
     /**
      * {@inheritdoc}
@@ -95,9 +106,9 @@ class SaveJunctureRelationships extends \yii\base\Behavior
             if(!isset($relationship_data['juncture_model'])){
                 throw new InvalidConfigException('The `juncture_model` key must be set in the relationship data');
             }
-            if(!isset($relationship_data['related_model'])){
+/*            if(!isset($relationship_data['related_model'])){
                 throw new InvalidConfigException('The `related_model` key must be set in the relationship data');
-            }
+            }*/
 
             $this->applyDefaults($relationship_data);
         }
@@ -109,20 +120,20 @@ class SaveJunctureRelationships extends \yii\base\Behavior
      */
     private function applyDefaults(&$relationship_data)
     {
-        if(!isset($relationship_data['related_ids_attribute'])){
-            $relationship_data['related_ids_attribute'] = ($relationship_data['related_model']::tableName()).'_ids';
-        }
-
-        if(!isset($relationship_data['relation_name'])){
-            $relationship_data['relation_name'] = lcfirst(Inflector::pluralize(Inflector::id2camel($relationship_data['related_model']::tableName(), '_')));
-        }
-
         if(!isset($relationship_data['juncture_relation_name'])){
             $relationship_data['juncture_relation_name'] = lcfirst(Inflector::pluralize(Inflector::id2camel($relationship_data['juncture_model']::tableName(), '_')));
         }
 
+        if(!isset($relationship_data['related_ids_attribute'])){
+            $relationship_data['related_ids_attribute'] = $this->getDefaultFromRelatedModel($relationship_data, 'related_ids_attribute');
+        }
+
+        if(!isset($relationship_data['relation_name'])){
+            $relationship_data['relation_name'] = $this->getDefaultFromRelatedModel($relationship_data, 'relation_name');
+        }
+
         if(!isset($relationship_data['related_id_attribute_in_juncture_table'])){
-            $relationship_data['related_id_attribute_in_juncture_table'] = ($relationship_data['related_model']::tableName()).'_id';
+            $relationship_data['related_id_attribute_in_juncture_table'] = $this->getDefaultFromRelatedModel($relationship_data, 'related_id_attribute_in_juncture_table');
         }
 
         if(!isset($relationship_data['owner_id_attribute_in_juncture_table'])){
@@ -132,12 +143,62 @@ class SaveJunctureRelationships extends \yii\base\Behavior
         // --- If they have additional juncture data attributes set then let's imlpement more defaults
         if(isset($relationship_data['additional_juncture_attributes'])){
             if(!isset($relationship_data['additional_juncture_data_prop'])){
-                $relationship_data['additional_juncture_data_prop'] = $relationship_data['related_model']::tableName().'s_data';
-                if(!isset($this->owner->{$relationship_data['additional_juncture_data_prop']})){
-                    throw new InvalidConfigException('The behavior for saving juncture relationships is attempting to use the default property for additional juncture data "'.$relationship_data['additional_juncture_data_prop'].'" but that property does not exist on the model. Please define a valid property  for "additional_juncture_data_prop" in behavior configuration');
-                }
+                $relationship_data['additional_juncture_data_prop'] = $this->getDefaultFromRelatedModel($relationship_data, 'additional_juncture_data_prop');
             }
         }
+    }
+
+    /**
+     * Tries to determine a default value for an attribute from the related model
+     * @param array $relationship_data
+     * @param string $relationship_property_name
+     * @return string
+     * @throws InvalidConfigException when a related model is not set for a default to be determined from, or the default property cannot be found
+     */
+    private function getDefaultFromRelatedModel($relationship_data, $relationship_property_name)
+    {
+        if(!isset($relationship_data['related_model'])){
+            throw new InvalidConfigException('A `'.$attribute_name.'` is not set and there is not a `related_model` attribute set to try to determine a default from.');
+        }
+
+        if($relationship_property_name == 'related_ids_attribute'){
+            $default_attribute_name = ($relationship_data['related_model']::tableName()).'_ids';
+            $this->validateDefaultOnOwner($relationship_property_name, $default_attribute_name);
+        }
+
+        if($relationship_property_name == 'relation_name'){
+            $default_attribute_name = lcfirst(Inflector::pluralize(Inflector::id2camel($relationship_data['related_model']::tableName(), '_')));
+            $this->validateDefaultOnOwner($relationship_property_name, $default_attribute_name);
+        }
+
+        if($relationship_property_name == 'related_id_attribute_in_juncture_table'){
+            $default_attribute_name = ($relationship_data['related_model']::tableName()).'_id';
+            if(!$this->junctureModelCanGetProperty($relationship_data['juncture_relation_name'], $relationship_data['juncture_model'], $default_attribute_name)){
+                throw new InvalidConfigException('A `'.$relationship_property_name.'` is not set and the default value `'.$default_attribute_name.'` is not valid');
+            }
+        }
+
+        if($relationship_property_name == 'additional_juncture_data_prop'){
+            $default_attribute_name = $relationship_data['related_model']::tableName().'s_data';
+            $this->validateDefaultOnOwner($relationship_property_name, $default_attribute_name);
+        }
+
+        return $default_attribute_name;
+    }
+
+    /**
+     * Validates that a default property exists on the owner model
+     * @param string $relationship_property_name
+     * @param string $default_attribute_name
+     * @return bool
+     * @throws InvalidConfigException when the property does not exist on the owner
+     */
+    private function validateDefaultOnOwner($relationship_property_name, $default_attribute_name)
+    {
+        if(!$this->owner->canGetProperty($default_attribute_name)){
+            throw new InvalidConfigException('A `'.$relationship_property_name.'` is not set and the default value `'.$default_attribute_name.'` is not valid');
+        }
+        return true;
     }
 
     /**
@@ -277,5 +338,23 @@ class SaveJunctureRelationships extends \yii\base\Behavior
             throw new BadRequestHttpException('There was a problem creating a relationship: '.Html::errorSummary($juncture_model));
         }
         return true;
+    }
+
+    /**
+     * Returns an instance of the juncture model for the relationship so we can determine
+     * if a default setting for a property applies correctly to the juncture model
+     * @param string $juncture_relation_name Relation name to check off the owner if a juncture model has a property
+     * @param string $juncture_model_classname Name of the juncture model class to instantiate to check for property
+     * @param string $property_name Name of the property we are checking for
+     * @return mixed
+     */
+    private function junctureModelCanGetProperty($juncture_relation_name, $juncture_model_classname, $property_name)
+    {
+        if($this->owner->{$juncture_relation_name}){
+            return $this->owner->{$juncture_relation_name}->canGetProperty($property_name);
+        } else if(empty($this->_juncture_model_for_validating[$juncture_model_classname])){
+            $this->_juncture_model_for_validating[$juncture_model_classname] = new $juncture_model_classname;
+        }
+        return $this->_juncture_model_for_validating[$juncture_model_classname]->canGetProperty($property_name);
     }
 }
