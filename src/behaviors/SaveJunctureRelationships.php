@@ -158,7 +158,7 @@ class SaveJunctureRelationships extends \yii\base\Behavior
     private function getDefaultFromRelatedModel($relationship_data, $relationship_property_name)
     {
         if(!isset($relationship_data['related_model'])){
-            throw new InvalidConfigException('A `'.$attribute_name.'` is not set and there is not a `related_model` attribute set to try to determine a default from.');
+            throw new InvalidConfigException('A `'.$relationship_property_name.'` is not set and there is not a `related_model` attribute set to try to determine a default from.');
         }
 
         if($relationship_property_name == 'related_ids_attribute'){
