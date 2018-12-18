@@ -19,11 +19,28 @@ use Yii;
 class JunctureField extends InputWidget
 {
     /**
-     * @const string Constants used to indicate the field type
+     * Constant to identify we want to render a text input
+     * @const string
      */
     const INPUT_TEXT = 'textInput';
+
+    /**
+     * Constant to identify we want to render a select field. Using this also requires a `data_list`
+     * @const string
+     */
     const INPUT_DROPDOWN = 'dropdownList';
+
+    /**
+     * Constant to identify we want to a datepicker field
+     * @const string
+     */
     const INPUT_DATEPICKER = 'datepicker';
+
+    /**
+     * Constant to identify we want to render a text area
+     * @const string
+     */
+    const INPUT_TEXTAREA = 'textArea';
 
     /**
      * @var \yii\widgets\ActiveForm
@@ -327,6 +344,8 @@ JS;
         switch($juncture_attribute_data['input']){
             case self::INPUT_TEXT:
                 return $field_default->textInput($field_attributes)->render();
+            case self::INPUT_TEXTAREA: 
+                return $field_default->textArea($field_attributes)->render();
             case self::INPUT_DROPDOWN: 
                 return $field_default->dropdownList($juncture_attribute_data['data'], $field_attributes)->render();
             case self::INPUT_DATEPICKER:

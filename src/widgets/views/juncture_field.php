@@ -23,7 +23,9 @@ $juncture_identifier_shortname = strtolower($juncture_model->formName());
                     <?php foreach($juncture_attributes as $juncture_attribute_data): ?>
                     <th>
                         <?= $juncture_model->getAttributeLabel($juncture_attribute_data['attribute']); ?>
-                        <i class="fas fa-question-circle" data-toggle="tooltip" title="<?= $juncture_model->getAttributeHint($juncture_attribute_data['attribute']); ?>"></i>
+                        <?php if($hint = $juncture_model->getAttributeHint($juncture_attribute_data['attribute'])): ?>
+                        <i class="fas fa-question-circle" data-toggle="tooltip" title="<?= $hint; ?>"></i>
+                        <?php endif; ?>
                     </th>
                     <?php endforeach; ?>
                 </thead>
@@ -74,6 +76,8 @@ $juncture_identifier_shortname = strtolower($juncture_model->formName());
                                 echo $active_field_default->dropDownList($juncture_attribute_data['data'], $input_options_defaults);
                             } elseif($juncture_attribute_data['input'] == JunctureField::INPUT_TEXT){
                                 echo $active_field_default->textInput($input_options_defaults);
+                            } elseif($juncture_attribute_data['input'] == JunctureField::INPUT_TEXTAREA){
+                                echo $active_field_default->textArea($input_options_defaults);
                             } elseif($juncture_attribute_data['input'] == JunctureField::INPUT_DATEPICKER){
                                 echo $active_field_default->widget(DatePicker::classname(), [
                                     'options' => $input_options_defaults,
