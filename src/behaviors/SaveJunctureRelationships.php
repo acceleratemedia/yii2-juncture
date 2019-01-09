@@ -98,7 +98,7 @@ class SaveJunctureRelationships extends \yii\base\Behavior
     /**
      * Validates the relationship data array
      */
-    public function validateRelationConfig()
+    private function validateRelationConfig()
     {
         // --- Loop through all set up relations and ensure they are correctly configured and set defaults
         foreach($this->relationships as &$relationship_data){
@@ -106,9 +106,6 @@ class SaveJunctureRelationships extends \yii\base\Behavior
             if(!isset($relationship_data['juncture_model'])){
                 throw new InvalidConfigException('The `juncture_model` key must be set in the relationship data');
             }
-/*            if(!isset($relationship_data['related_model'])){
-                throw new InvalidConfigException('The `related_model` key must be set in the relationship data');
-            }*/
 
             $this->applyDefaults($relationship_data);
         }
@@ -203,6 +200,8 @@ class SaveJunctureRelationships extends \yii\base\Behavior
 
     /**
      * Populates original data for juncture relationships so we can see what to add/delete/update after save
+     * Due to the nature of this populating from each juncture relationship it is VERY WISE to join using 'with'
+     * for all relations in the query to improve performance and avoid lazy loading
      * @return void
      */
     public function afterFind()
@@ -350,8 +349,8 @@ class SaveJunctureRelationships extends \yii\base\Behavior
      */
     private function junctureModelCanGetProperty($juncture_relation_name, $juncture_model_classname, $property_name)
     {
-        if(isset($this->owner->{$juncture_relation_name}[0])){
-            return $this->owner->{$juncture_relation_name}[0]->canGetProperty($property_name);
+        if($this->owner->{$juncture_relation_name}){
+            return $this->owner->{$juncture_relation_name}->canGetProperty($property_name);
         } else if(empty($this->_juncture_model_for_validating[$juncture_model_classname])){
             $this->_juncture_model_for_validating[$juncture_model_classname] = new $juncture_model_classname;
         }
