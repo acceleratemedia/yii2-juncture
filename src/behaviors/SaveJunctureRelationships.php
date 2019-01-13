@@ -273,6 +273,11 @@ class SaveJunctureRelationships extends \yii\base\Behavior
     public function afterUpdate($event)
     {
         foreach($this->relationships as &$relationship_data){
+            // --- Have to check for this because even though we set in in afterFind() there might be some instances
+            // --- where we create a model and update it and afterFind() never runs
+            if(!isset($relationship_data['original_ids'])){
+                $relationship_data['original_ids'] = [];
+            }
             // --- Find the difference between the beginning ids and the ending ids to see which ones to remove
             $related_ids_to_remove = !is_array($this->owner->{$relationship_data['related_ids_attribute']}) ? 
                 $relationship_data['original_ids'] :
