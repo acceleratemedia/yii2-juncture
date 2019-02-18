@@ -3,6 +3,7 @@
 use bvb\juncture\widgets\JunctureField;
 use kartik\date\DatePicker;
 use kartik\select2\Select2;
+use yii\helpers\ArrayHelper;
 use yii\helpers\Html;
 
 $model_form_name = $model->formName();
@@ -53,7 +54,7 @@ $juncture_identifier_shortname = strtolower($juncture_model->formName());
                             $input_name = $model_form_name.'['.$additional_juncture_data_prop.']['.$juncture_model->{$related_id_attribute_in_juncture_table}.']['.$juncture_attribute_data['attribute'].']';
 
                             // --- Set some defaults for the activefield
-                            $active_field_default = $form->field($juncture_model, $juncture_attribute_data['attribute'], [
+                            $active_field_default_options = [
                                 'template' => '{input}{error}',
                                 'selectors' => [
                                     'input' => '#'.$input_id,
@@ -63,7 +64,14 @@ $juncture_identifier_shortname = strtolower($juncture_model->formName());
                                     'id' => $input_id.'-container',
                                     'validation_id' => $input_id
                                 ]
-                            ]);
+                            ];
+
+                            // --- If there was configuraiton for the active field options passed in merge them
+                            $active_field_options = (isset($juncture_attribute_data['active_field_options'])) ?
+                                 ArrayHelper::merge($active_field_default_options, $juncture_attribute_data['active_field_options']) : 
+                                 $active_field_default_options;
+
+                            $active_field_default = $form->field($juncture_model, $juncture_attribute_data['attribute'], $active_field_options);
 
                             $input_options_defaults = [
                                 'name' => $input_name,

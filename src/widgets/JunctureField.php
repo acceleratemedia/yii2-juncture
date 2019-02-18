@@ -4,6 +4,7 @@ namespace bvb\juncture\widgets;
 use bvb\juncture\behaviors\SaveJunctureRelationships;
 use kartik\date\DatePicker;
 use yii\base\InvalidConfigException;
+use yii\helpers\ArrayHelper;
 use yii\helpers\Html;
 use yii\helpers\Inflector;
 use yii\helpers\Json;
@@ -53,6 +54,7 @@ class JunctureField extends InputWidget
     public $relation_name_in_juncture_model;
 
     /**
+     * Name of the attribute on the juncture model used to label which item we are creating a juncture for
      * @var string
      */
     public $juncture_relation_display_attribute = 'name';
@@ -68,11 +70,14 @@ class JunctureField extends InputWidget
     public $related_id_attribute_in_juncture_table;
 
     /**
+     * Name of the property on the model that holds the additional juncture data
+     * Utilized for massive assignment of juncture attribute values on the parent model for procesing using the behavior
      * @var string
      */
     public $additional_juncture_data_prop;
 
     /**
+     * List of items to be rendered in a dropdownlist
      * @var array
      */
     public $data_list;
@@ -83,11 +88,28 @@ class JunctureField extends InputWidget
     public $juncture_model;
 
     /**
+     * Additional attribtues on the juncture model we want rendered in the widget
+     * ```
+     *   'juncture_attributes' => [
+     *       [
+     *           'attribute' => 'rank',
+     *           'input' => JunctureField::INPUT_TEXT,
+     *           'inputOptions' => [
+     *               'readOnly' => true
+     *           ]
+     *       ],
+     *       [
+     *           'attribute' => 'write_up',
+     *           'input' => JunctureField::INPUT_TEXTAREA,
+     *       ]
+     *   ],
+     * ```
      * @var array
      */
     public $juncture_attributes;
 
     /**
+     * Tge default type of input to be used to render additional attributes
      * @var string
      */
     public $default_input = self::INPUT_TEXT;
@@ -349,11 +371,26 @@ JS;
     private function getNewInput($juncture_attribute_data)
     {
         // --- Set up the default ActiveField instance
-        $field_default = $this->form->field($this->juncture_model, $juncture_attribute_data['attribute'], ['template'=>'{input}{error}', 'enableClientValidation'=>false]);
+        $active_field_default_options = [
+            'template'=>'{input}{error}',
+            'enableClientValidation'=>false
+        ];
+
+        // --- If there was configuraiton for the active field options passed in merge them
+        $active_field_options = (isset($juncture_attribute_data['active_field_options'])) ?
+             ArrayHelper::merge($active_field_default_options, $juncture_attribute_data['active_field_options']) : 
+             $active_field_default_options;      
+
+        $field_default = $this->form->field(
+            $this->juncture_model,
+            $juncture_attribute_data['attribute'],
+            $active_field_options
+        );
+
 
         // --- Some default for the field
         $field_attributes = [
-            'id' => null // --- This will be set in the javascript that generates the new fields so leave it blanke
+            'id' => null // --- This will be set in the javascript that generates the new fields so leave it blank
         ];
 
         if(isset($juncture_attribute_data['inputOptions']) && !empty($juncture_attribute_data['inputOptions'])){
