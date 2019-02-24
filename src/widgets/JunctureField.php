@@ -287,7 +287,8 @@ function validateNewDynamicField(config)
         error: ".invalid-feedback",
         validate:  config.validator
     };
-    $(config.form_id).yiiActiveForm("add", validation_config);  
+    console.log(validation_config);
+    $(config.form_id).yiiActiveForm("add", validation_config);
 }
 
 function addNewJunctureData(config)
