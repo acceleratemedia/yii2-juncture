@@ -260,6 +260,13 @@ class SaveJunctureRelationships extends \yii\base\Behavior
                 // --- Loop through and insert the values
                 foreach($this->owner->{$relationship_data['related_ids_attribute']} as $related_id_to_add){
                     $this->saveNewJunctureRelationship($relationship_data, $related_id_to_add);
+
+                    // --- Save the added IDs so if we do two saves in a row we don't try to add them twice
+                    // --- This is used in the update when checking which ones to add
+                    if(!isset($relationship_data['added_ids'])){
+                        $relationship_data['added_ids'] = [];
+                    }
+                    $relationship_data['added_ids'][] = $related_id_to_add;
                 }
             }
         }
@@ -292,10 +299,16 @@ class SaveJunctureRelationships extends \yii\base\Behavior
             }                    
 
 
-            // --- Find the difference between the beginning ids and ending ids to see which oens to add
+            // --- Get existing ids which is the original ids on the model and any added ones if we have them
+            $existing_ids = (isset($relationship_data['added_ids'])) ? 
+                array_merge($relationship_data['added_ids'], $relationship_data['original_ids']) : 
+                $relationship_data['original_ids'];
+
+            // --- Find which ones to add by comparing existing ids to what we have now
             $related_ids_to_add = !is_array($this->owner->{$relationship_data['related_ids_attribute']}) ? 
                 [] :
-                array_diff($this->owner->{$relationship_data['related_ids_attribute']}, $relationship_data['original_ids']);
+                array_diff($this->owner->{$relationship_data['related_ids_attribute']}, $existing_ids);
+
             foreach($related_ids_to_add as $related_id_to_add){
                 $this->saveNewJunctureRelationship($relationship_data, $related_id_to_add);
             }
@@ -341,6 +354,8 @@ class SaveJunctureRelationships extends \yii\base\Behavior
             // --- I would like to find a better way to handle an error on a juncture relationship with validation but for now I'm not sure how besides throwing this error since it's so far removed from the normal flow in this behavior
             throw new BadRequestHttpException('There was a problem creating a relationship: '.Html::errorSummary($juncture_model));
         }
+
+        // --- 
         return true;
     }
 
