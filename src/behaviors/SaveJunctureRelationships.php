@@ -369,7 +369,7 @@ class SaveJunctureRelationships extends \yii\base\Behavior
      */
     private function junctureModelCanGetProperty($juncture_relation_name, $juncture_model_classname, $property_name)
     {
-        if(!empty($this->owner->{$juncture_relation_name})){
+        if(!empty($this->owner->{$property_name}) && !empty($this->owner->{$juncture_relation_name})){
             return $this->owner->{$juncture_relation_name}[0]->canGetProperty($property_name);
         } else if(empty($this->_juncture_model_for_validating[$juncture_model_classname])){
             $this->_juncture_model_for_validating[$juncture_model_classname] = new $juncture_model_classname;
