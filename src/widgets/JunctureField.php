@@ -187,6 +187,7 @@ class JunctureField extends InputWidget
         return $this->render('juncture_field', [
             'form' => $this->form,
             'model' => $this->model,
+            'options' => $this->options,
             'related_ids_attribute' => $this->attribute,
             'relation_name_in_juncture_model' => $this->relation_name_in_juncture_model,
             'juncture_relation_display_attribute' => $this->juncture_relation_display_attribute,

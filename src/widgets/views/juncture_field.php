@@ -15,6 +15,13 @@ $juncture_identifier_shortname = strtolower($juncture_model->formName());
             'model' => $model,
             'attribute' => $related_ids_attribute,
             'data' => $data_list,
+            'options' => ArrayHelper::merge($options, [
+                'multiple' => true
+            ]),
+            'pluginOptions' => [
+                'allowClear' => true,
+                'closeOnSelect' => false
+            ]
         ]) ?>
 
         <div class="related-data-container">
