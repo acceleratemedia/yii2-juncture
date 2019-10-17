@@ -340,7 +340,8 @@ class SaveJunctureRelationships extends \yii\base\Behavior
     private function saveNewJunctureRelationship($relationship_data, $related_id_to_add)
     {
         $juncture_model = new $relationship_data['juncture_model'];
-        $juncture_model->{$relationship_data['owner_id_attribute_in_juncture_table']} = $this->owner->id;
+        $pkArray = $this->owner->primaryKey();
+        $juncture_model->{$relationship_data['owner_id_attribute_in_juncture_table']} = $this->owner->{$pkArray[0]};
         $juncture_model->{$relationship_data['related_id_attribute_in_juncture_table']} = $related_id_to_add;
 
         // --- If we have additional attributes in the juncture relationship we want to get those and save them
