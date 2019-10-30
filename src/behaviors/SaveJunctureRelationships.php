@@ -344,15 +344,25 @@ class SaveJunctureRelationships extends \yii\base\Behavior
         $juncture_model->{$relationship_data['owner_id_attribute_in_juncture_table']} = $this->owner->{$pkArray[0]};
         $juncture_model->{$relationship_data['related_id_attribute_in_juncture_table']} = $related_id_to_add;
 
-        // --- If we have additional attributes in the juncture relationship we want to get those and save them
-        if(isset($relationship_data['additional_juncture_attributes'])){
+        // --- Save additional juncture attributes if they have been set in config
+        // --- Also perform a check to make that additional attribtues were set in
+        // --- the data property. A juncture relationship could be saved without the
+        // --- additional attributes present and in that case we don't want to try
+        // --- to process them because it will theow an error
+        if(
+            isset($relationship_data['additional_juncture_attributes']) &&
+            !empty($this->owner->{$relationship_data['additional_juncture_data_prop']})
+        ){
             // --- Loop through the attributes and get the values from POST and assign them
             foreach($relationship_data['additional_juncture_attributes'] as $juncture_attribute_name){
                 $juncture_model->{$juncture_attribute_name} = $this->owner->{$relationship_data['additional_juncture_data_prop']}[$related_id_to_add][$juncture_attribute_name];
             }
         }
         if(!$juncture_model->save()){
-            // --- I would like to find a better way to handle an error on a juncture relationship with validation but for now I'm not sure how besides throwing this error since it's so far removed from the normal flow in this behavior
+            // --- I would like to find a better way to handle an error on a juncture
+            // --- relationship with validation but for now I'm not sure how besides
+            // ---  throwing this error since it's so far removed from the normal
+            // --- flow in this behavior
             throw new BadRequestHttpException('There was a problem creating a relationship: '.Html::errorSummary($juncture_model));
         }
 
