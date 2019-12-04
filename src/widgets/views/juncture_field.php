@@ -42,8 +42,21 @@ $juncture_identifier_shortname = strtolower($juncture_model->formName());
                 // --- Very important to use our activefield for custom validation ids on these repeating juncture records
                 $original_field_class = $form->fieldClass;
                 $form->fieldClass = '\bvb\juncture\widgets\ActiveField';
+
+                // --- The javascript going into document.ready is specific to this instance
+                if(is_array($owner_pk_in_juncture_table)){
+                    $ownerPkFieldNames = [];
+                    foreach($model->primaryKey() as $attributeName){
+                        $ownerPkFieldValues[] = $model->{$attributeName};
+                    }
+                    $ownerPkFieldNameForRowId = implode('-', $owner_pk_in_juncture_table);
+                    $ownerPkFieldValueForRowId = implode('-', $ownerPkFieldValues);
+                } else {
+                    $ownerPkFieldNameForRowId = $model->{$model->primaryKey()[0]};
+                    $ownerPkFieldValueForRowId = $juncture_model->{$owner_pk_in_juncture_table};
+                }
                 foreach($model->{$additional_juncture_data_prop} as $juncture_model): ?>
-                    <tr id="<?= $owner_id_attribute_in_juncture_table; ?>-<?= $juncture_model->{$owner_id_attribute_in_juncture_table}; ?>-<?= $related_id_attribute_in_juncture_table; ?>-<?= $juncture_model->{$related_id_attribute_in_juncture_table}; ?>">
+                    <tr id="<?= $ownerPkFieldNameForRowId; ?>-<?= $ownerPkFieldValueForRowId; ?>-<?= $related_id_attribute_in_juncture_table; ?>-<?= $juncture_model->{$related_id_attribute_in_juncture_table}; ?>">
                         <td>
                             <?= Html::activeHiddenInput($juncture_model, $related_id_attribute_in_juncture_table, [
                                     'name' => $model_form_name.'['.$additional_juncture_data_prop.']['.$juncture_model->{$related_id_attribute_in_juncture_table}.']['.$related_id_attribute_in_juncture_table.']',

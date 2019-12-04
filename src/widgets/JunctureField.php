@@ -62,7 +62,7 @@ class JunctureField extends InputWidget
     /**
      * @var string
      */
-    public $owner_id_attribute_in_juncture_table;
+    public $owner_pk_in_juncture_table;
 
     /**
      * @var string
@@ -137,8 +137,8 @@ class JunctureField extends InputWidget
                         // --- Check to see if this widget is for the attribute in this set of relationship data
                         if($relationship_data['related_ids_attribute'] == $this->attribute){
                             // --- Set some defaults based on the behavior if they are not specificied in the instantiation of this widget
-                            if($this->owner_id_attribute_in_juncture_table === null){
-                                $this->owner_id_attribute_in_juncture_table = $relationship_data['owner_id_attribute_in_juncture_table'];
+                            if($this->owner_pk_in_juncture_table === null){
+                                $this->owner_pk_in_juncture_table = $relationship_data['owner_pk_in_juncture_table'];
                             }
 
                             if($this->related_id_attribute_in_juncture_table === null){
@@ -191,7 +191,7 @@ class JunctureField extends InputWidget
             'related_ids_attribute' => $this->attribute,
             'relation_name_in_juncture_model' => $this->relation_name_in_juncture_model,
             'juncture_relation_display_attribute' => $this->juncture_relation_display_attribute,
-            'owner_id_attribute_in_juncture_table' => $this->owner_id_attribute_in_juncture_table,
+            'owner_pk_in_juncture_table' => $this->owner_pk_in_juncture_table,
             'related_id_attribute_in_juncture_table' => $this->related_id_attribute_in_juncture_table,
             'additional_juncture_data_prop' => $this->additional_juncture_data_prop,
             'data_list' => $this->data_list,
@@ -245,7 +245,15 @@ class JunctureField extends InputWidget
         $callback = (!empty($callbacks)) ? 'function(){'.implode($callbacks, '').'}' : null;
 
         // --- The javascript going into document.ready is specific to this instance
-        $model_identifier = $this->model->{$this->model->primaryKey()[0]};
+        if(is_array($this->owner_pk_in_juncture_table)){
+            $ownerPks = [];
+            foreach($this->model->primaryKey() as $attributeName){
+                $ownerPks[] = $this->model->{$attributeName};
+            }
+            $model_identifier = implode('-', $ownerPks);
+        } else {
+            $model_identifier = $this->model->{$this->model->primaryKey()[0]};
+        }
 
         // --- Set up the configuraiton used when adding a new field
         $new_juncture_data_config = [
@@ -255,7 +263,7 @@ class JunctureField extends InputWidget
             'related_id_attribute_in_juncture_table' => $this->related_id_attribute_in_juncture_table,
             'juncture_identifier_shortname' => $juncture_identifier_shortname,
             'model_id' => $model_identifier,
-            'owner_id_attribute_in_juncture_table' => $this->owner_id_attribute_in_juncture_table,
+            'owner_pk_in_juncture_table' => $this->owner_pk_in_juncture_table,
             'selected_data' => new JsExpression('e.params.data'), // --- 'e' refers to the event of the select2 plugin
             'attribute_config_data' => $fields_config_data,
             'callback' => ($callback) ? new JsExpression($callback) : null
@@ -263,7 +271,8 @@ class JunctureField extends InputWidget
 
         $new_juncture_data_config_json = Json::encode($new_juncture_data_config);
 
-        $ready_js = <<<JS
+        $rowId = (is_array($this->owner_pk_in_juncture_table)) ? implode('-', $this->owner_pk_in_juncture_table) : $this->owner_pk_in_juncture_table;
+        $ready_js = <<<JAVASCRIPT
 $("[data-toggle=tooltip]").tooltip({placement: "auto"});
 $("#{$field_id}").on("select2:select", function(e){
     addNewJunctureData({$new_juncture_data_config_json})
@@ -271,13 +280,13 @@ $("#{$field_id}").on("select2:select", function(e){
 
 $("#{$field_id}").on("select2:unselect", function(e){
     var data = e.params.data;
-    $("#{$juncture_identifier_shortname}-table tbody tr#{$this->owner_id_attribute_in_juncture_table}-{$model_identifier}-{$this->related_id_attribute_in_juncture_table}-"+data.id).remove();
+    $("#{$juncture_identifier_shortname}-table tbody tr#{$rowId}-{$model_identifier}-{$this->related_id_attribute_in_juncture_table}-"+data.id).remove();
 });
-JS;
+JAVASCRIPT;
         $this->getView()->registerJs($ready_js);
 
         // --- This javascript is global to this ui functionality
-        $js = <<<JS
+        $js = <<<JAVASCRIPT
 function validateNewDynamicField(config)
 {
     var validation_config = {
@@ -312,7 +321,7 @@ function addNewJunctureData(config)
 
     // --- Create a new row with the label cell
     var new_row = $("<tr></tr>")
-        .attr("id", config.owner_id_attribute_in_juncture_table+"-"+config.model_id+"-"+config.related_id_attribute_in_juncture_table+"-"+data.id)
+        .attr("id", config.owner_pk_in_juncture_table+"-"+config.model_id+"-"+config.related_id_attribute_in_juncture_table+"-"+data.id)
         .append(label_cell);
 
     // --- Append all of the juncture fields that need input to the row
@@ -360,7 +369,7 @@ function addNewJunctureData(config)
         config.callback();
     }
 }
-JS;
+JAVASCRIPT;
 
         $this->getView()->registerJs($js, View::POS_END, 'add-juncture-record');
     }
