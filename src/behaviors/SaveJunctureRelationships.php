@@ -2,6 +2,7 @@
 
 namespace bvb\juncture\behaviors;
 
+use Yii;
 use yii\db\BaseActiveRecord;
 use yii\helpers\Html;
 use yii\helpers\Inflector;
@@ -386,7 +387,7 @@ class SaveJunctureRelationships extends \yii\base\Behavior
         if(!$juncture_model->save()){
             // --- I would like to find a better way to handle an error on a juncture
             // --- relationship with validation but for now I'm not sure how besides
-            // ---  throwing this error since it's so far removed from the normal
+            // --- throwing this error since it's so far removed from the normal
             // --- flow in this behavior
             throw new BadRequestHttpException('There was a problem creating a relationship: '.Html::errorSummary($juncture_model));
         }
@@ -405,7 +406,7 @@ class SaveJunctureRelationships extends \yii\base\Behavior
      */
     private function junctureModelCanGetProperty($juncture_relation_name, $juncture_model_classname, $property_name)
     {
-        if(!empty($this->owner->{$property_name}) && !empty($this->owner->{$juncture_relation_name})){
+        if(!$this->owner->isNewRecord && !empty($this->owner->{$juncture_relation_name})){
             return $this->owner->{$juncture_relation_name}[0]->canGetProperty($property_name);
         } else if(empty($this->_juncture_model_for_validating[$juncture_model_classname])){
             $this->_juncture_model_for_validating[$juncture_model_classname] = new $juncture_model_classname;
