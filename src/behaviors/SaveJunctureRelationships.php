@@ -171,7 +171,7 @@ class SaveJunctureRelationships extends \yii\base\Behavior
         if($relationship_property_name == 'related_id_attribute_in_juncture_table'){
             $default_attribute_name = ($relationship_data['related_model']::tableName()).'_id';
             if(!$this->junctureModelCanGetProperty($relationship_data['juncture_relation_name'], $relationship_data['juncture_model'], $default_attribute_name)){
-                throw new InvalidConfigException('A `'.$relationship_property_name.'` is not set and the default value `'.$default_attribute_name.'` is not valid');
+                throw new InvalidConfigException('A `'.$relationship_property_name.'` is not set on '.get_class($this->owner).' and the default value `'.$default_attribute_name.'` is not valid');
             }
         }
 
@@ -193,7 +193,7 @@ class SaveJunctureRelationships extends \yii\base\Behavior
     private function validateDefaultOnOwner($relationship_property_name, $default_attribute_name)
     {
         if(!$this->owner->canGetProperty($default_attribute_name)){
-            throw new InvalidConfigException('A `'.$relationship_property_name.'` is not set and the default value `'.$default_attribute_name.'` is not valid');
+            throw new InvalidConfigException('A `'.$relationship_property_name.'` is not set on '.get_class($this->owner).' and the default value `'.$default_attribute_name.'` is not valid');
         }
         return true;
     }
