@@ -47,7 +47,19 @@ use yii\web\BadRequestHttpException;
  *               'additional_juncture_data_prop' => 'benefits_data', // --- Name of the owner's attribute which holds additional data
  *               'additional_juncture_attributes' => [ // --- Names of additional attributes with data that needs saving
  *                  'compares'
- *               ]
+ *               ],
+ *
+ *               // --- Optional configuraiton for scenarios in which a relationship should be saved
+ *               // --- If this is not set it will save in all scenarios
+ *               'saveScenarios' => [
+ *                   OwnerClass::SCENARIO_NAME
+ *               ],
+ *               // --- Optional configuraiton for scenarios in which a relationship should not be saved
+ *               // --- This is useful if you want to save in all scenarios except for a couple
+ *               // --- saveScenarios and doNotSaveScenarios should not be used at the same time
+ *               'doNotSaveScenarios' => [
+ *
+ *               ],
  *           ]
  *       ]
  *   ] 
@@ -89,17 +101,15 @@ class SaveJunctureRelationships extends \yii\base\Behavior
     public function attach($owner){
         parent::attach($owner);
         if(empty($this->relationships)){
-            throw new InvalidConfigException('Relationships must be configred for SaveJunctureRelationships behavior to work');
+            throw new InvalidConfigException('At least one relationship must be configred for SaveJunctureRelationships behavior to work');
         }
-        foreach($this->relationships as &$relationship_data){
-            $this->validateRelationConfig($relationship_data);
-        }
+        $this->validateRelationsConfig();
     }
 
     /**
      * Validates the relationship data array
      */
-    private function validateRelationConfig()
+    private function validateRelationsConfig()
     {
         // --- Loop through all set up relations and ensure they are correctly configured and set defaults
         foreach($this->relationships as &$relationship_data){
@@ -107,7 +117,9 @@ class SaveJunctureRelationships extends \yii\base\Behavior
             if(!isset($relationship_data['juncture_model'])){
                 throw new InvalidConfigException('The `juncture_model` key must be set in the relationship data');
             }
-
+            if(isset($relationship_data['saveScenarios']) && isset($relationship_data['doNotSaveScenarios'])){
+                throw new InvalidConfigException('`saveScenarios` and `doNotSaveScenarios` should not both be set for a relationship.');
+            }
             $this->applyDefaults($relationship_data);
         }
     }
@@ -143,6 +155,14 @@ class SaveJunctureRelationships extends \yii\base\Behavior
             if(!isset($relationship_data['additional_juncture_data_prop'])){
                 $relationship_data['additional_juncture_data_prop'] = $this->getDefaultFromRelatedModel($relationship_data, 'additional_juncture_data_prop');
             }
+        }
+
+        if(!isset($relationship_data['saveScenarios'])){
+            $relationship_data['saveScenarios'] = [];
+        }
+
+        if(!isset($relationship_data['doNotSaveScenarios'])){
+            $relationship_data['doNotSaveScenarios'] = [];
         }
     }
 
@@ -268,8 +288,12 @@ class SaveJunctureRelationships extends \yii\base\Behavior
     public function afterInsert($event)
     {
         foreach($this->relationships as &$relationship_data){
-            // --- Make sure it's an array so we know to insert
-            if(is_array($this->owner->{$relationship_data['related_ids_attribute']})){
+            if(
+                // --- Check scenarios
+                $this->isSaveScenario($relationship_data) && 
+                 // --- Forms may post empty values resulting in non-arrays so this check makes sure we have values to save
+                is_array($this->owner->{$relationship_data['related_ids_attribute']})
+            ){
                 // --- Loop through and insert the values
                 foreach($this->owner->{$relationship_data['related_ids_attribute']} as $related_id_to_add){
                     $this->saveNewJunctureRelationship($relationship_data, $related_id_to_add);
@@ -293,6 +317,10 @@ class SaveJunctureRelationships extends \yii\base\Behavior
     public function afterUpdate($event)
     {
         foreach($this->relationships as &$relationship_data){
+            if(!$this->isSaveScenario($relationship_data)){
+                // --- Skip if we aren't in a saving scenario
+                continue;
+            }
             // --- Have to check for this because even though we set in in afterFind() there might be some instances
             // --- where we create a model and update it and afterFind() never runs
             if(!isset($relationship_data['original_ids'])){
@@ -334,6 +362,8 @@ class SaveJunctureRelationships extends \yii\base\Behavior
                         !in_array($juncture_relationship_id, $related_ids_to_remove)
                     ){
                         // --- If this was not an added or removed relationship then check with the original ones to see if it needs to be updated
+                        // --- @todo This is not checking whether the attributes changed and saving based on that, it's just saving no matter what
+                        // --- which is a performance issue. Need to do a better check
                         foreach($relationship_data['original_data'] as $original_juncture_related_id => $original_juncture_relationship_model){
                             if($juncture_relationship_id == $original_juncture_related_id){
                                 $original_juncture_relationship_model->attributes = $juncture_relationship_model->attributes;
@@ -412,5 +442,23 @@ class SaveJunctureRelationships extends \yii\base\Behavior
             $this->_juncture_model_for_validating[$juncture_model_classname] = new $juncture_model_classname;
         }
         return $this->_juncture_model_for_validating[$juncture_model_classname]->canGetProperty($property_name);
+    }
+
+    /**
+     * Whether or not relationship data should be saved
+     * If no scenarios are specified in $relationshipData['saveScenarios'] and
+     * $relationshipData['doNotSaveScenarios'] it will always be true
+     * If $relationshipData['saveScenarios'] is not empty, it will only save if
+     * the owner's scenario is in the array
+     * If $relationshipData['doNotSaveScenarios'] is not empty, it will save by default
+     * unless the owner's scenario is in the array
+     * @param array $relationshipData
+     * @return boolean
+     */
+    private function isSaveScenario($relationshipData)
+    {
+        return (empty($relationshipData['saveScenarios']) && empty($relationshipData['doNotSaveScenarios'])) ||
+            !empty($relationshipData['saveScenarios']) && in_array($this->owner->getScenario(), $relationshipData['saveScenarios']) ||
+            !empty($relationshipData['doNotSaveScenarios']) && !in_array($this->owner->getScenario(), $relationshipData['doNotSaveScenarios']);
     }
 }
