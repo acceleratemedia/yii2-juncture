@@ -24,8 +24,8 @@ $juncture_identifier_shortname = strtolower($juncture_model->formName());
         ]
     ]) ?>
 
-    <div class="related-data-container">
-        <table id="<?= $juncture_identifier_shortname; ?>-table" class="table table-responsive table-striped table-sm">
+    <div class="related-data-container table-responsive">
+        <table id="<?= $juncture_identifier_shortname; ?>-table" class="table table-striped table-sm">
             <thead>
                 <th><?= $juncture_model->getAttributeLabel($related_id_attribute_in_juncture_table); ?></td>
                 <?php foreach($juncture_attributes as $juncture_attribute_data): ?>
@@ -52,8 +52,8 @@ $juncture_identifier_shortname = strtolower($juncture_model->formName());
                 $ownerPkFieldNameForRowId = implode('-', $owner_pk_in_juncture_table);
                 $ownerPkFieldValueForRowId = implode('-', $ownerPkFieldValues);
             } else {
-                $ownerPkFieldNameForRowId = $model->{$model->primaryKey()[0]};
-                $ownerPkFieldValueForRowId = $juncture_model->{$owner_pk_in_juncture_table};
+                $ownerPkFieldNameForRowId = $owner_pk_in_juncture_table;
+                $ownerPkFieldValueForRowId = $model->{$model->primaryKey()[0]};
             }
             foreach($model->{$additional_juncture_data_prop} as $juncture_model): ?>
                 <tr id="<?= $ownerPkFieldNameForRowId; ?>-<?= $ownerPkFieldValueForRowId; ?>-<?= $related_id_attribute_in_juncture_table; ?>-<?= $juncture_model->{$related_id_attribute_in_juncture_table}; ?>">
