@@ -226,6 +226,14 @@ class JunctureField extends InputWidget
                 $validationStrs[] = $validator->clientValidateAttribute($this->junctureModel, $junctureAttributeData['attribute'], $this->getView());
             }
 
+            // --- Set up the config for this field which will be used in the javascript
+            $fieldConfigData = [
+                'attribute' => $junctureAttributeData['attribute'],
+                'newInput' => (!isset($junctureAttributeData['newInput']) || empty($junctureAttributeData['newInput'])) ? $this->getNewInput($junctureAttributeData) : $junctureAttributeData['newInput'],
+                'validator' => new JsExpression('function (attribute, value, messages, deferred, form) {'.implode($validationStrs, "\n").'}'),
+                'multiple' => false
+            ];
+
             // --- If the juncture attribute has an input that requires a callback to initialize, set it
             if($junctureAttributeData['input'] == self::INPUT_DATEPICKER){
                 // --- If there is a datepicker destroy instances of it and re-initialize so the new input has it working
@@ -233,12 +241,33 @@ class JunctureField extends InputWidget
                 $callbacks[self::INPUT_DATEPICKER] = new JsExpression('$(".krajee-datepicker").kvDatepicker("destroy");$(".krajee-datepicker").kvDatepicker({"autoclose":true,"format":"yyyy-mm-dd"});');
             }
 
-            // --- Set up the config for this field which will be used in the javascript
-            $fieldsConfigData[] = [
-                'attribute' => $junctureAttributeData['attribute'],
-                'newInput' => (!isset($junctureAttributeData['newInput']) || empty($junctureAttributeData['newInput'])) ? $this->getNewInput($junctureAttributeData) : $junctureAttributeData['newInput'],
-                'validator' => new JsExpression('function (attribute, value, messages, deferred, form) {'.implode($validationStrs, "\n").'}')
-            ];
+            if($junctureAttributeData['input'] == self::INPUT_SELECT2){
+                $junctureIdentifierShortname = strtolower($this->junctureModel->formName());
+                // --- If there is a select2 make sure to properly initialize this new one
+                // --- This was tricky because of the way the plugin does it. I have to try
+                // --- to pull the variable names it creates out of the new field string
+                preg_match('/"s2options_(.+?)\\"/',$fieldConfigData['newInput'],$matches);
+                $s2OptionsStr = $matches[1];
+                preg_match('/"select2_(.+?)\\"/',$fieldConfigData['newInput'],$matches);
+                $s2ConfigStr = $matches[1];
+
+                // --- Then, copying the plugin code that initializes the new field
+                // --- and using a selector targeting it from the last row of the table
+                // --- we will run that code on the newly created instance
+                $genericInputId = Html::getInputId($this->junctureModel, $junctureAttributeData['attribute']);
+                $selector = '#'.$junctureIdentifierShortname.'-table tr:last select[id*='.strtolower($junctureAttributeData['attribute']).']';
+$js = <<<JAVASCRIPT
+jQuery.when(jQuery("{$selector}").select2(select2_{$s2ConfigStr}))
+    .done(function(e){
+        initS2Loading("{$genericInputId}","s2options_{$s2OptionsStr}");
+        initS2ToggleAll(jQuery("{$selector}").attr("id"));
+    });
+JAVASCRIPT;
+                $callbacks[self::INPUT_SELECT2] = new JsExpression($js);
+                $fieldConfigData['multiple'] = true;
+            }
+
+            $fieldsConfigData[] = $fieldConfigData;
         }
 
         // --- Prepare some fields we can use in the javascript
@@ -301,7 +330,6 @@ function validateNewDynamicField(config)
         error: ".invalid-feedback",
         validate:  config.validator
     };
-    console.log(validationConfig);
     $(config.formId).yiiActiveForm("add", validationConfig);
 }
 
@@ -337,7 +365,7 @@ function addNewJunctureData(config)
         var newInput_container_classes = newInput.attr("class").split(/\s+/);
         var newClasses = [];
         $.each(newInput_container_classes, function(index, item){
-            if (item === "field-"+config.junctureIdentifierShortname+"-"+attributeConfigData.attribute) {
+            if (item === "field-"+config.junctureIdentifierShortname+"-"+attributeConfigData.attribute.toLowerCase()) {
                 item += "-"+data.id;
             }
             newClasses.push(item)
@@ -345,9 +373,13 @@ function addNewJunctureData(config)
         $(newInput).attr("class", newClasses.join(" "));
 
         // --- Update the name of the new input to include the id of the juncture relation
-        var newInputId = config.junctureIdentifierShortname+"-"+attributeConfigData.attribute+"-"+data.id;;
+        var newInputId = config.junctureIdentifierShortname+"-"+attributeConfigData.attribute.toLowerCase()+"-"+data.id;;
         var newInputName = config.modelFormName+"["+config.additionalJunctureDataProp+"]["+data.id+"]["+attributeConfigData.attribute+"]";
-        $("select, input, textarea", newInput)
+        if(attributeConfigData.multiple){
+            newInputName += "[]";
+        }
+
+        $("select, input[type!=hidden], textarea", newInput)
             .attr("name", newInputName)
             .attr("id", newInputId);
         var newRowCell = $("<td></td>")
@@ -359,7 +391,7 @@ function addNewJunctureData(config)
             formId: config.formId,
             id: newInputId,
             name: newInputName,
-            container: ".field-"+config.junctureIdentifierShortname+"-"+attributeConfigData.attribute+"-"+data.id,
+            container: ".field-"+config.junctureIdentifierShortname+"-"+attributeConfigData.attribute.toLowerCase()+"-"+data.id,
             input: "#"+newInputId,
             validator: attributeConfigData.validator
         });

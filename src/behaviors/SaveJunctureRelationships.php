@@ -134,8 +134,7 @@ class SaveJunctureRelationships extends \yii\base\Behavior
     {
         if(!isset($relationshipData['junctureRelationName'])){
             $relationshipData['junctureRelationName'] = lcfirst(Inflector::pluralize(Inflector::id2camel($relationshipData['junctureModel']::tableName(), '_')));
-            $this->validateDefaultOnOwner('junctureRelationName', $relationshipData['junctureRelationName']);
-            echo \yii::info($relationshipData['junctureRelationName']);
+            $this->validateDefaultOnOwner('junctureRelationName', $relationshipData['junctureRelationName'], $relationshipData['junctureModel']);
         }
 
         if(!isset($relationshipData['relatedPksAttribute'])){
@@ -148,10 +147,16 @@ class SaveJunctureRelationships extends \yii\base\Behavior
 
         if(!isset($relationshipData['relatedPksColumnInJunctureTable'])){
             $relationshipData['relatedPksColumnInJunctureTable'] = $this->getDefaultFromRelatedModel($relationshipData, 'relatedPksColumnInJunctureTable');
+            if(!$relationshipData['junctureModel']::instance()->canGetProperty($relationshipData['relatedPksColumnInJunctureTable'])){
+                throw new InvalidConfigException('A `relatedPksColumnInJunctureTable` is not set on '.get_class($this->owner).' and the default value `'.$relationshipData['relatedPksColumnInJunctureTable'].'` is not valid for the relationship to '.$relationshipData['junctureModel']);
+            }
         }
 
         if(!isset($relationshipData['ownerPkColumnInJunctureTable'])){
             $relationshipData['ownerPkColumnInJunctureTable'] = $this->owner->tableName().'_id';
+            if(!$relationshipData['junctureModel']::instance()->canGetProperty($relationshipData['ownerPkColumnInJunctureTable'])){
+                throw new InvalidConfigException('A `ownerPkColumnInJunctureTable` is not set on '.get_class($this->owner).' and the default value `'.$relationshipData['ownerPkColumnInJunctureTable'].'` is not valid for the relationship to '.$relationshipData['junctureModel']);
+            }
         }
 
         // --- If they have additional juncture data attributes set then let's imlpement more defaults
@@ -185,12 +190,12 @@ class SaveJunctureRelationships extends \yii\base\Behavior
 
         if($relationshipPropertyName == 'relatedPksAttribute'){
             $defaultAttributeName = lcfirst(Inflector::id2camel($relationshipData['relatedModel']::tableName(), '_')).'Ids';
-            $this->validateDefaultOnOwner($relationshipPropertyName, $defaultAttributeName);
+            $this->validateDefaultOnOwner($relationshipPropertyName, $defaultAttributeName, $relationshipData['junctureModel']);
         }
 
         if($relationshipPropertyName == 'relationName'){
             $defaultAttributeName = lcfirst(Inflector::pluralize(Inflector::id2camel($relationshipData['relatedModel']::tableName(), '_')));
-            $this->validateDefaultOnOwner($relationshipPropertyName, $defaultAttributeName);
+            $this->validateDefaultOnOwner($relationshipPropertyName, $defaultAttributeName, $relationshipData['junctureModel']);
         }
 
         if($relationshipPropertyName == 'relatedPksColumnInJunctureTable'){
@@ -202,7 +207,7 @@ class SaveJunctureRelationships extends \yii\base\Behavior
 
         if($relationshipPropertyName == 'additionalJunctureDataProp'){
             $defaultAttributeName = lcfirst(Inflector::id2camel($relationshipData['relatedModel']::tableName(), '_')).'sData';
-            $this->validateDefaultOnOwner($relationshipPropertyName, $defaultAttributeName);
+            $this->validateDefaultOnOwner($relationshipPropertyName, $defaultAttributeName, $relationshipData['junctureModel']);
         }
 
         return $defaultAttributeName;
@@ -212,13 +217,14 @@ class SaveJunctureRelationships extends \yii\base\Behavior
      * Validates that a default property exists on the owner model
      * @param string $relationshipPropertyName
      * @param string $defaultAttributeName
+     * @param string $junctureModel
      * @return bool
      * @throws InvalidConfigException when the property does not exist on the owner
      */
-    private function validateDefaultOnOwner($relationshipPropertyName, $defaultAttributeName)
+    private function validateDefaultOnOwner($relationshipPropertyName, $defaultAttributeName, $junctureModel)
     {
         if(!$this->owner->canGetProperty($defaultAttributeName)){
-            throw new InvalidConfigException('A `'.$relationshipPropertyName.'` is not set on '.get_class($this->owner).' and the default value `'.$defaultAttributeName.'` is not valid');
+            throw new InvalidConfigException('A `'.$relationshipPropertyName.'` is not set on '.get_class($this->owner).' and the default value `'.$defaultAttributeName.'` is not valid for the relationship to '.$junctureModel);
         }
         return true;
     }
@@ -370,7 +376,18 @@ class SaveJunctureRelationships extends \yii\base\Behavior
                         // --- which is a performance issue. Need to do a better check
                         foreach($relationshipData['originalData'] as $originalJunctureRelatedPk => $originalJunctureRelationshipModel){
                             if($junctureRelationshipId == $originalJunctureRelatedPk){
-                                $originalJunctureRelationshipModel->attributes = $junctureRelationshipModel->attributes;
+                                // --- Assign attributes and make sure to include attribute that are
+                                // --- safe to assign that are class properties but not database columns 
+                                $attributesToAssign = $junctureRelationshipModel->attributes;
+                                $originalJunctureRelationshipModel->attributes = $attributesToAssign;
+
+                                $safeAttributes = $originalJunctureRelationshipModel->safeAttributes();
+                                foreach($safeAttributes as $safeAttributeName){
+                                    if(!array_key_exists($safeAttributeName, $attributesToAssign)){
+                                        $originalJunctureRelationshipModel->{$safeAttributeName} = $junctureRelationshipModel->{$safeAttributeName};
+                                    }
+                                }
+
                                 if(!$originalJunctureRelationshipModel->save()){
                                     throw new BadRequestHttpException('There was a problem updating a relationship: '.Html::errorSummary($originalJunctureRelationshipModel));
                                 }
@@ -423,6 +440,7 @@ class SaveJunctureRelationships extends \yii\base\Behavior
             // --- relationship with validation but for now I'm not sure how besides
             // --- throwing this error since it's so far removed from the normal
             // --- flow in this behavior
+            \Yii::error(print_r($junctureModel,true));
             throw new BadRequestHttpException('There was a problem creating a relationship: '.Html::errorSummary($junctureModel));
         }
 

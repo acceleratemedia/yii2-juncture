@@ -120,7 +120,6 @@ $junctureIdentifierShortname = strtolower($junctureModel->formName());
                                 ]
                             ]);
                         } elseif($junctureAttributeData['input'] == JunctureField::INPUT_SELECT2){
-                            \Yii::info(\yii\helpers\VarDumper::dumpAsString($inputOptionsDefaults));
                             echo $activeFieldDefault->widget(Select2::class, [
                                 'data' => $junctureAttributeData['data'],
                                 'options' => $inputOptionsDefaults
