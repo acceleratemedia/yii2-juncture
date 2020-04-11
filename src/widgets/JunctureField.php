@@ -3,6 +3,7 @@ namespace bvb\juncture\widgets;
 
 use bvb\juncture\behaviors\SaveJunctureRelationships;
 use kartik\date\DatePicker;
+use kartik\select2\Select2;
 use yii\base\InvalidConfigException;
 use yii\helpers\ArrayHelper;
 use yii\helpers\Html;
@@ -21,27 +22,33 @@ class JunctureField extends InputWidget
 {
     /**
      * Constant to identify we want to render a text input
-     * @const string
+     * @var string
      */
     const INPUT_TEXT = 'textInput';
 
     /**
-     * Constant to identify we want to render a select field. Using this also requires a `data_list`
-     * @const string
+     * Constant to identify we want to render a select field. Using this also requires a `dropdownOptions`
+     * @var string
      */
     const INPUT_DROPDOWN = 'dropdownList';
 
     /**
+     * Constant to identify we want to render a text area
+     * @var string
+     */
+    const INPUT_TEXTAREA = 'textArea';
+
+    /**
      * Constant to identify we want to a datepicker field
-     * @const string
+     * @var string
      */
     const INPUT_DATEPICKER = 'datepicker';
 
     /**
-     * Constant to identify we want to render a text area
-     * @const string
+     * Constant to identify we want to render a select2 widget
+     * @var string
      */
-    const INPUT_TEXTAREA = 'textArea';
+    const INPUT_SELECT2 = 'select2';
 
     /**
      * @var \yii\widgets\ActiveForm
@@ -51,46 +58,47 @@ class JunctureField extends InputWidget
     /**
      * @var string
      */
-    public $relation_name_in_juncture_model;
+    public $relationNameInJunctureModel;
 
     /**
-     * Name of the attribute on the juncture model used to label which item we are creating a juncture for
+     * Name of the attribute on the juncture model used to label which record
+     * we are creating a juncture relation for
      * @var string
      */
-    public $juncture_relation_display_attribute = 'name';
-
-    /**
-     * @var string
-     */
-    public $owner_pk_in_juncture_table;
+    public $junctureRelationDisplayAttribute = 'name';
 
     /**
      * @var string
      */
-    public $related_id_attribute_in_juncture_table;
+    public $ownerPkColumnInJunctureTable;
+
+    /**
+     * @var string
+     */
+    public $relatedPksColumnInJunctureTable;
 
     /**
      * Name of the property on the model that holds the additional juncture data
      * Utilized for massive assignment of juncture attribute values on the parent model for procesing using the behavior
      * @var string
      */
-    public $additional_juncture_data_prop;
+    public $additionalJunctureDataProp;
 
     /**
      * List of items to be rendered in a dropdownlist
      * @var array
      */
-    public $data_list;
+    public $dropdownOptions;
 
     /**
      * @var\yii\db\ActiveRecord
      */
-    public $juncture_model;
+    public $junctureModel;
 
     /**
      * Additional attribtues on the juncture model we want rendered in the widget
      * ```
-     *   'juncture_attributes' => [
+     *   'junctureAttributes' => [
      *       [
      *           'attribute' => 'rank',
      *           'input' => JunctureField::INPUT_TEXT,
@@ -106,65 +114,61 @@ class JunctureField extends InputWidget
      * ```
      * @var array
      */
-    public $juncture_attributes;
+    public $junctureAttributes;
 
     /**
      * Tge default type of input to be used to render additional attributes
      * @var string
      */
-    public $default_input = self::INPUT_TEXT;
+    public $defaultInput = self::INPUT_TEXT;
 
     /**
      * A callback to be executed when a new juncture item is added
      * @var string
      */
-    public $new_item_callback;
+    public $newItemCallback;
 
     /**
      * {@inheritdoc}
      */
     public function init()
     {
-        $juncture_behavior_attached = false;
-        if($this->model->behaviors !== null){
-            // --- Just for setting up some defaults
-            foreach($this->model->behaviors as $behavior){
-                // --- Check to see if the behavior for saving juncture relationships is attached
-                if($behavior::className() == SaveJunctureRelationships::className()){
-                    $juncture_behavior_attached = true;
-                    // --- Loop through the set up relationships to see if this widget is for the specified relationship
-                    foreach($behavior->relationships as $relationship_data){
-                        // --- Check to see if this widget is for the attribute in this set of relationship data
-                        if($relationship_data['related_ids_attribute'] == $this->attribute){
+        $junctureBehaviorAttached = false;
+        if($this->model->behaviors !== null){ // --- To avoid error
+            foreach($this->model->behaviors as $behavior){ // --- Loop to see if SaveJunctureRelationships is attached
+                if($behavior::className() == SaveJunctureRelationships::class){ // --- keep Classname() to avoid compile error
+                    $junctureBehaviorAttached = true;
+                    foreach($behavior->relationships as $relationshipData){// --- Loop relationships until we find one for this widget
+                        if($relationshipData['relatedPksAttribute'] == $this->attribute){
                             // --- Set some defaults based on the behavior if they are not specificied in the instantiation of this widget
-                            if($this->owner_pk_in_juncture_table === null){
-                                $this->owner_pk_in_juncture_table = $relationship_data['owner_pk_in_juncture_table'];
+                            if($this->ownerPkColumnInJunctureTable === null){
+                                $this->ownerPkColumnInJunctureTable = $relationshipData['ownerPkColumnInJunctureTable'];
                             }
 
-                            if($this->related_id_attribute_in_juncture_table === null){
-                                $this->related_id_attribute_in_juncture_table = $relationship_data['related_id_attribute_in_juncture_table'];
+                            if($this->relatedPksColumnInJunctureTable === null){
+                                $this->relatedPksColumnInJunctureTable = $relationshipData['relatedPksColumnInJunctureTable'];
                             }
 
-                            if($this->additional_juncture_data_prop === null){
-                                $this->additional_juncture_data_prop = $relationship_data['additional_juncture_data_prop'];
+                            if($this->additionalJunctureDataProp === null){
+                                $this->additionalJunctureDataProp = $relationshipData['additionalJunctureDataProp'];
                             }
 
-                            if($this->juncture_model === null){
-                                $this->juncture_model = new $relationship_data['juncture_model'];
+                            if($this->junctureModel === null){
+                                $this->junctureModel = new $relationshipData['junctureModel'];
                             }
 
-                            if($this->juncture_attributes === null){
-                                foreach($relationship_data['additional_juncture_attributes'] as $attribute_name){
+                            if($this->junctureAttributes === null){
+                                foreach($relationshipData['additionalJunctureAttributes'] as $attributeName){
                                     // --- Default configuration is to use all juncture attributes as a text input
-                                    $this->juncture_attributes[] = [
-                                        'attribute' => $attribute_name,
-                                        'input' => $this->default_input
+                                    $this->junctureAttributes[] = [
+                                        'attribute' => $attributeName,
+                                        'input' => $this->defaultInput
                                     ];
                                 }
                             }
 
-                            if($this->relation_name_in_juncture_model === null){
-                                $this->relation_name_in_juncture_model = lcfirst((new \ReflectionClass($relationship_data['related_model']))->getShortName());
+                            if($this->relationNameInJunctureModel === null){
+                                $this->relationNameInJunctureModel = lcfirst((new \ReflectionClass($relationshipData['relatedModel']))->getShortName());
                             }
                         }
                     }
@@ -172,7 +176,7 @@ class JunctureField extends InputWidget
             }   
         }
 
-        if(!$juncture_behavior_attached){
+        if(!$junctureBehaviorAttached){
             throw new InvalidConfigException('The behavior '.SaveJunctureRelationships::className().' must be attached to '.$this->model->className().' for the juncture input widget to work');
         }
     }
@@ -184,19 +188,19 @@ class JunctureField extends InputWidget
     {
         $this->registerJunctureUiJs();
 
-        return $this->render('juncture_field', [
+        return $this->render('juncture-field', [
             'form' => $this->form,
             'model' => $this->model,
             'options' => $this->options,
-            'related_ids_attribute' => $this->attribute,
-            'relation_name_in_juncture_model' => $this->relation_name_in_juncture_model,
-            'juncture_relation_display_attribute' => $this->juncture_relation_display_attribute,
-            'owner_pk_in_juncture_table' => $this->owner_pk_in_juncture_table,
-            'related_id_attribute_in_juncture_table' => $this->related_id_attribute_in_juncture_table,
-            'additional_juncture_data_prop' => $this->additional_juncture_data_prop,
-            'data_list' => $this->data_list,
-            'juncture_model' => $this->juncture_model,
-            'juncture_attributes' => $this->juncture_attributes
+            'relatedPksAttribute' => $this->attribute,
+            'relationNameInJunctureModel' => $this->relationNameInJunctureModel,
+            'junctureRelationDisplayAttribute' => $this->junctureRelationDisplayAttribute,
+            'ownerPkColumnInJunctureTable' => $this->ownerPkColumnInJunctureTable,
+            'relatedPksColumnInJunctureTable' => $this->relatedPksColumnInJunctureTable,
+            'additionalJunctureDataProp' => $this->additionalJunctureDataProp,
+            'dropdownOptions' => $this->dropdownOptions,
+            'junctureModel' => $this->junctureModel,
+            'junctureAttributes' => $this->junctureAttributes
         ]);
     }
 
@@ -206,81 +210,81 @@ class JunctureField extends InputWidget
     private function registerJunctureUiJs()
     {
         // --- Loop through all juncture attributes to get fields configuration data
-        $fields_config_data = []; // --- Holds the special configuration for each new field being added
+        $fieldsConfigData = []; // --- Holds the special configuration for each new field being added
         $callbacks = []; // --- Holds a callback for each field requires one
 
         // --- If we have an overall callback for after adding a new row then run it
-        if(!empty($this->new_item_callback)){
-            $callbacks[] = $this->new_item_callback;
+        if(!empty($this->newItemCallback)){
+            $callbacks[] = $this->newItemCallback;
         }
 
-        foreach($this->juncture_attributes as $juncture_attribute_data){
+        foreach($this->junctureAttributes as $junctureAttributeData){
             // --- Loop through validators on this attribute so we can create js validation for each attribute
-            $validation_strs = [];
-            $validators = $this->juncture_model->getActiveValidators($juncture_attribute_data['attribute']);
+            $validationStrs = [];
+            $validators = $this->junctureModel->getActiveValidators($junctureAttributeData['attribute']);
             foreach($validators as $validator){
-                $validation_strs[] = $validator->clientValidateAttribute($this->juncture_model, $juncture_attribute_data['attribute'], $this->getView());
+                $validationStrs[] = $validator->clientValidateAttribute($this->junctureModel, $junctureAttributeData['attribute'], $this->getView());
             }
 
             // --- If the juncture attribute has an input that requires a callback to initialize, set it
-            if($juncture_attribute_data['input'] == self::INPUT_DATEPICKER){
+            if($junctureAttributeData['input'] == self::INPUT_DATEPICKER){
                 // --- If there is a datepicker destroy instances of it and re-initialize so the new input has it working
                 // --- Not sure if doing this by the input type is the best decision but for now it seems that way
                 $callbacks[self::INPUT_DATEPICKER] = new JsExpression('$(".krajee-datepicker").kvDatepicker("destroy");$(".krajee-datepicker").kvDatepicker({"autoclose":true,"format":"yyyy-mm-dd"});');
             }
 
             // --- Set up the config for this field which will be used in the javascript
-            $fields_config_data[] = [
-                'attribute' => $juncture_attribute_data['attribute'],
-                'new_input' => (!isset($juncture_attribute_data['new_input']) || empty($juncture_attribute_data['new_input'])) ? $this->getNewInput($juncture_attribute_data) : $juncture_attribute_data['new_input'],
-                'validator' => new JsExpression('function (attribute, value, messages, deferred, form) {'.implode($validation_strs, "\n").'}')
+            $fieldsConfigData[] = [
+                'attribute' => $junctureAttributeData['attribute'],
+                'newInput' => (!isset($junctureAttributeData['newInput']) || empty($junctureAttributeData['newInput'])) ? $this->getNewInput($junctureAttributeData) : $junctureAttributeData['newInput'],
+                'validator' => new JsExpression('function (attribute, value, messages, deferred, form) {'.implode($validationStrs, "\n").'}')
             ];
         }
 
         // --- Prepare some fields we can use in the javascript
-        $field_id = Html::getInputId($this->model, $this->attribute);
-        $juncture_identifier_shortname = strtolower($this->juncture_model->formName());
+        $fieldId = Html::getInputId($this->model, $this->attribute);
+        $junctureIdentifierShortname = strtolower($this->junctureModel->formName());
 
         // --- Set up a callback function each time a new record is added consisting of all of the
         $callback = (!empty($callbacks)) ? 'function(){'.implode($callbacks, '').'}' : null;
 
         // --- The javascript going into document.ready is specific to this instance
-        if(is_array($this->owner_pk_in_juncture_table)){
+        if(is_array($this->ownerPkColumnInJunctureTable)){
             $ownerPks = [];
             foreach($this->model->primaryKey() as $attributeName){
                 $ownerPks[] = $this->model->{$attributeName};
             }
-            $model_identifier = implode('-', $ownerPks);
+            $modelIdentifier = implode('-', $ownerPks);
         } else {
-            $model_identifier = $this->model->{$this->model->primaryKey()[0]};
+            $modelIdentifier = $this->model->{$this->model->primaryKey()[0]};
         }
 
         // --- Set up the configuraiton used when adding a new field
-        $new_juncture_data_config = [
-            'model_form_name' => $this->model->formName(),
-            'form_id' => '#'.$this->form->id,
-            'additional_juncture_data_prop' => $this->additional_juncture_data_prop,
-            'related_id_attribute_in_juncture_table' => $this->related_id_attribute_in_juncture_table,
-            'juncture_identifier_shortname' => $juncture_identifier_shortname,
-            'model_id' => $model_identifier,
-            'owner_pk_in_juncture_table' => $this->owner_pk_in_juncture_table,
-            'selected_data' => new JsExpression('e.params.data'), // --- 'e' refers to the event of the select2 plugin
-            'attribute_config_data' => $fields_config_data,
+        $newJunctureDataConfig = [
+            'modelFormName' => $this->model->formName(),
+            'formId' => '#'.$this->form->id,
+            'additionalJunctureDataProp' => $this->additionalJunctureDataProp,
+            'relatedPksColumnInJunctureTable' => $this->relatedPksColumnInJunctureTable,
+            'junctureIdentifierShortname' => $junctureIdentifierShortname,
+            'modelId' => $modelIdentifier,
+            'ownerPkColumnInJunctureTable' => $this->ownerPkColumnInJunctureTable,
+            'selectedData' => new JsExpression('e.params.data'), // --- 'e' refers to the event of the select2 plugin
+            'attributeConfigData' => $fieldsConfigData,
             'callback' => ($callback) ? new JsExpression($callback) : null
         ];
 
-        $new_juncture_data_config_json = Json::encode($new_juncture_data_config);
+        $newJunctureDataConfigJson = Json::encode($newJunctureDataConfig);
 
-        $rowId = (is_array($this->owner_pk_in_juncture_table)) ? implode('-', $this->owner_pk_in_juncture_table) : $this->owner_pk_in_juncture_table;
+        $rowId = (is_array($this->ownerPkColumnInJunctureTable)) ? implode('-', $this->ownerPkColumnInJunctureTable) : $this->ownerPkColumnInJunctureTable;
         $ready_js = <<<JAVASCRIPT
 $("[data-toggle=tooltip]").tooltip({placement: "auto"});
-$("#{$field_id}").on("select2:select", function(e){
-    addNewJunctureData({$new_juncture_data_config_json})
+$("#{$fieldId}").on("select2:select", function(e){
+    addNewJunctureData({$newJunctureDataConfigJson})
 });
 
-$("#{$field_id}").on("select2:unselect", function(e){
+$("#{$fieldId}").on("select2:unselect", function(e){
     var data = e.params.data;
-    $("#{$juncture_identifier_shortname}-table tbody tr#{$rowId}-{$model_identifier}-{$this->related_id_attribute_in_juncture_table}-"+data.id).remove();
+    $("#{$junctureIdentifierShortname}-table tbody tr#{$rowId}-{$modelIdentifier}-{$this->relatedPksColumnInJunctureTable}-"+data.id).remove();
 });
 JAVASCRIPT;
         $this->getView()->registerJs($ready_js);
@@ -289,7 +293,7 @@ JAVASCRIPT;
         $js = <<<JAVASCRIPT
 function validateNewDynamicField(config)
 {
-    var validation_config = {
+    var validationConfig = {
         id: config.id,
         name: config.name,
         container: config.container,
@@ -297,72 +301,72 @@ function validateNewDynamicField(config)
         error: ".invalid-feedback",
         validate:  config.validator
     };
-    console.log(validation_config);
-    $(config.form_id).yiiActiveForm("add", validation_config);
+    console.log(validationConfig);
+    $(config.formId).yiiActiveForm("add", validationConfig);
 }
 
 function addNewJunctureData(config)
 {
     // --- Get the data from the select element
-    var data = config.selected_data;
+    var data = config.selectedData;
 
     // --- Create a hidden input with the id of the juncture related model
-    var hidden_input = $("<input>").attr({
+    var hiddenInput = $("<input>").attr({
         type: "hidden",
-        name: config.model_form_name+"["+config.additional_juncture_data_prop+"]["+data.id+"]["+config.related_id_attribute_in_juncture_table+"]",
-        id: config.juncture_identifier_shortname+"-"+config.related_id_attribute_in_juncture_table+"-"+data.id,
+        name: config.modelFormName+"["+config.additionalJunctureDataProp+"]["+data.id+"]["+config.relatedPksColumnInJunctureTable+"]",
+        id: config.junctureIdentifierShortname+"-"+config.relatedPksColumnInJunctureTable+"-"+data.id,
         value: data.id
     });
 
     // --- Create a label cell with the id field and the label
-    var label_cell = $("<td></td>")
-        .append(hidden_input)
+    var labelCell = $("<td></td>")
+        .append(hiddenInput)
         .append("<span class=\"display-attribute\">"+data.text+"</span>");
 
     // --- Create a new row with the label cell
-    var new_row = $("<tr></tr>")
-        .attr("id", config.owner_pk_in_juncture_table+"-"+config.model_id+"-"+config.related_id_attribute_in_juncture_table+"-"+data.id)
-        .append(label_cell);
+    var newRow = $("<tr></tr>")
+        .attr("id", config.ownerPkColumnInJunctureTable+"-"+config.modelId+"-"+config.relatedPksColumnInJunctureTable+"-"+data.id)
+        .append(labelCell);
 
     // --- Append all of the juncture fields that need input to the row
-    $.each(config.attribute_config_data, function(idx, attribute_config_data){
-        var new_input = $(attribute_config_data.new_input);
+    $.each(config.attributeConfigData, function(idx, attributeConfigData){
+        var newInput = $(attributeConfigData.newInput);
 
         // --- Update the "field" class used by Yii to add the ID to the end and update the
         // --- class of the container of the new input to specify this
-        var new_input_container_classes = new_input.attr("class").split(/\s+/);
-        var new_classes = [];
-        $.each(new_input_container_classes, function(index, item){
-            if (item === "field-"+config.juncture_identifier_shortname+"-"+attribute_config_data.attribute) {
+        var newInput_container_classes = newInput.attr("class").split(/\s+/);
+        var newClasses = [];
+        $.each(newInput_container_classes, function(index, item){
+            if (item === "field-"+config.junctureIdentifierShortname+"-"+attributeConfigData.attribute) {
                 item += "-"+data.id;
             }
-            new_classes.push(item)
+            newClasses.push(item)
         });
-        $(new_input).attr("class", new_classes.join(" "));
+        $(newInput).attr("class", newClasses.join(" "));
 
         // --- Update the name of the new input to include the id of the juncture relation
-        var new_input_id = config.juncture_identifier_shortname+"-"+attribute_config_data.attribute+"-"+data.id;;
-        var new_input_name = config.model_form_name+"["+config.additional_juncture_data_prop+"]["+data.id+"]["+attribute_config_data.attribute+"]";
-        $("select, input, textarea", new_input)
-            .attr("name", new_input_name)
-            .attr("id", new_input_id);
-        var new_row_cell = $("<td></td>")
-            .append(new_input);
-        new_row.append(new_row_cell);
+        var newInputId = config.junctureIdentifierShortname+"-"+attributeConfigData.attribute+"-"+data.id;;
+        var newInputName = config.modelFormName+"["+config.additionalJunctureDataProp+"]["+data.id+"]["+attributeConfigData.attribute+"]";
+        $("select, input, textarea", newInput)
+            .attr("name", newInputName)
+            .attr("id", newInputId);
+        var newRowCell = $("<td></td>")
+            .append(newInput);
+        newRow.append(newRowCell);
 
         // --- Add form validation for the new field
         validateNewDynamicField({
-            form_id: config.form_id,
-            id: new_input_id,
-            name: new_input_name,
-            container: ".field-"+config.juncture_identifier_shortname+"-"+attribute_config_data.attribute+"-"+data.id,
-            input: "#"+new_input_id,
-            validator: attribute_config_data.validator
+            formId: config.formId,
+            id: newInputId,
+            name: newInputName,
+            container: ".field-"+config.junctureIdentifierShortname+"-"+attributeConfigData.attribute+"-"+data.id,
+            input: "#"+newInputId,
+            validator: attributeConfigData.validator
         });
     });
 
     // --- Append the new row to the table
-    $("#"+config.juncture_identifier_shortname+"-table tbody").append(new_row);
+    $("#"+config.junctureIdentifierShortname+"-table tbody").append(newRow);
 
     // --- Run the callback if there is one
     if(config.callback){
@@ -376,60 +380,65 @@ JAVASCRIPT;
 
     /**
      * Gets a the default HTML for a new input to be used when a new juncture relation is added
-     * @param array $juncture_attribute_data
+     * @param array $junctureAttributeData
      * @return string
      */
-    private function getNewInput($juncture_attribute_data)
+    private function getNewInput($junctureAttributeData)
     {
         // --- Set up the default ActiveField instance
-        $active_field_default_options = [
+        $activeFieldDefaultOptions = [
             'template'=>'{input}{error}',
             'enableClientValidation'=>false
         ];
 
         // --- If there was configuraiton for the active field options passed in merge them
-        $active_field_options = (isset($juncture_attribute_data['active_field_options'])) ?
-             ArrayHelper::merge($active_field_default_options, $juncture_attribute_data['active_field_options']) : 
-             $active_field_default_options;      
+        $activeFieldOptions = (isset($junctureAttributeData['activeFieldOptions'])) ?
+             ArrayHelper::merge($activeFieldDefaultOptions, $junctureAttributeData['activeFieldOptions']) : 
+             $activeFieldDefaultOptions;      
 
-        $field_default = $this->form->field(
-            $this->juncture_model,
-            $juncture_attribute_data['attribute'],
-            $active_field_options
+        $fieldDefault = $this->form->field(
+            $this->junctureModel,
+            $junctureAttributeData['attribute'],
+            $activeFieldOptions
         );
 
 
         // --- Some default for the field
-        $field_attributes = [
+        $fieldAttributes = [
             'id' => null // --- This will be set in the javascript that generates the new fields so leave it blank
         ];
 
-        if(isset($juncture_attribute_data['inputOptions']) && !empty($juncture_attribute_data['inputOptions'])){
-            $field_attributes = array_merge($field_attributes, $juncture_attribute_data['inputOptions']);
+        if(isset($junctureAttributeData['inputOptions']) && !empty($junctureAttributeData['inputOptions'])){
+            $fieldAttributes = array_merge($fieldAttributes, $junctureAttributeData['inputOptions']);
         }
 
         // --- Apply a default value if one is set
-        if(isset($juncture_attribute_data['default_value'])){
-            $this->juncture_model->{$juncture_attribute_data['attribute']} = $juncture_attribute_data['default_value'];
+        if(isset($junctureAttributeData['defaultValue'])){
+            $this->junctureModel->{$junctureAttributeData['attribute']} = $junctureAttributeData['defaultValue'];
         }
 
         // --- Return the input based on the type
-        switch($juncture_attribute_data['input']){
-            case self::INPUT_TEXT:
-                return $field_default->textInput($field_attributes)->render();
+        switch($junctureAttributeData['input']){
             case self::INPUT_TEXTAREA: 
-                return $field_default->textArea($field_attributes)->render();
+                return $fieldDefault->textArea($fieldAttributes)->render();
             case self::INPUT_DROPDOWN: 
-                return $field_default->dropdownList($juncture_attribute_data['data'], $field_attributes)->render();
+                return $fieldDefault->dropdownList($junctureAttributeData['data'], $fieldAttributes)->render();
             case self::INPUT_DATEPICKER:
-                return $field_default->widget(DatePicker::classname(), [
-                    'options' => $field_attributes,
+                return $fieldDefault->widget(DatePicker::class, [
+                    'options' => $fieldAttributes,
                     'pluginOptions' => [
                         'autoclose' => true,
                         'format' => 'yyyy-mm-dd'
                     ]
                 ])->render();
+            case self::INPUT_SELECT2:
+                return $fieldDefault->widget(Select2::class, [
+                    'options' => $fieldAttributes,
+                    'data' => $junctureAttributeData['data']
+                ])->render();
             default: 
+            case self::INPUT_TEXT:
+                return $fieldDefault->textInput($fieldAttributes)->render();
         }
     }
 }
