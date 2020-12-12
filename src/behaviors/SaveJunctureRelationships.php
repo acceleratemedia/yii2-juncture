@@ -82,7 +82,7 @@ class SaveJunctureRelationships extends \yii\base\Behavior
      * attributes exist
      * @var yii\db\ActiveRecord
      */
-    private $_junctureMmodelForValidating;
+    private $_junctureModelForValidating;
 
     /**
      * {@inheritdoc}
@@ -460,10 +460,10 @@ class SaveJunctureRelationships extends \yii\base\Behavior
     {
         if(!$this->owner->isNewRecord && !empty($this->owner->{$junctureRelationName})){
             return $this->owner->{$junctureRelationName}[0]->canGetProperty($propertyName);
-        } else if(empty($this->_junctureMmodelForValidating[$junctureModelClass])){
-            $this->_junctureMmodelForValidating[$junctureModelClass] = new $junctureModelClass;
+        } else if(empty($this->_junctureModelForValidating[$junctureModelClass])){
+            $this->_junctureModelForValidating[$junctureModelClass] = new $junctureModelClass;
         }
-        return $this->_junctureMmodelForValidating[$junctureModelClass]->canGetProperty($propertyName);
+        return $this->_junctureModelForValidating[$junctureModelClass]->canGetProperty($propertyName);
     }
 
     /**
