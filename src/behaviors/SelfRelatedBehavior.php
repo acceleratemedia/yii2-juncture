@@ -213,6 +213,10 @@ class SelfRelatedBehavior extends \yii\base\Behavior
                 }
                 return $this->_selfRelatedIds[$name];
             }
+
+            if(in_array($name, $this->selfRelations)){
+                return $this->getSelfRelation($name);
+            }
             throw $e;
         }
     }
