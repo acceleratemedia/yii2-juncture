@@ -13,6 +13,12 @@ use yii\web\ServerErrorHttpException;
 class SaveSelfRelatedBehavior extends \bvb\juncture\behaviors\SelfRelatedBehavior
 {
     /**
+     * Whether or not the record is being created
+     * @var boolean
+     */
+    protected $ownerIsBeingCreated;
+
+    /**
      * Whether to throw an error if a juncture model doesn't save
      * @var boolean
      */
@@ -46,18 +52,27 @@ class SaveSelfRelatedBehavior extends \bvb\juncture\behaviors\SelfRelatedBehavio
      */
     public function beforeValidate()
     {
-        $ownerParams = $this->getOwnerRequestParams();   
-        if($ownerParams){
+        $this->ownerIsBeingCreated = $this->owner->isNewRecord;
+        if($this->ownerIsBeingCreated && Yii::$app instanceof \yii\console\Application){
+            // --- New records in console applications automatically save all set values
+            // --- since they must've been set intentionally
             foreach($this->_selfRelatedIds as $selfRelatedIdsFieldName => $selfRelatedIds){
-                if(isset($ownerParams[$selfRelatedIdsFieldName])){
-                    // --- Ensure that the relation is populated so we know that 
-                    // --- the original values are populated as we set the new ones
-                    $this->ensureRelationPopulated(null, $selfRelatedIdsFieldName);
-                    $this->_selfRelatedIds[$selfRelatedIdsFieldName] = $ownerParams[$selfRelatedIdsFieldName];
-                    $this->_selfRelatedIdsFieldsToSave[] = $selfRelatedIdsFieldName;
-                } else {
-                    // --- Not set on owner probably means we shouldn't try to save this one because
-                    // --- it might be accidentally deleting them all
+                $this->_selfRelatedIdsFieldsToSave[] = $selfRelatedIdsFieldName;
+            }
+        } else {
+            $ownerParams = $this->getOwnerRequestParams();   
+            if($ownerParams){
+                foreach($this->_selfRelatedIds as $selfRelatedIdsFieldName => $selfRelatedIds){
+                    if(isset($ownerParams[$selfRelatedIdsFieldName])){
+                        // --- Ensure that the relation is populated so we know that 
+                        // --- the original values are populated as we set the new ones
+                        $this->ensureRelationPopulated(null, $selfRelatedIdsFieldName);
+                        $this->_selfRelatedIds[$selfRelatedIdsFieldName] = $ownerParams[$selfRelatedIdsFieldName];
+                        $this->_selfRelatedIdsFieldsToSave[] = $selfRelatedIdsFieldName;
+                    } else {
+                        // --- Not set on owner probably means we shouldn't try to save this one because
+                        // --- it might be accidentally deleting them all
+                    }
                 }
             }
         }
@@ -113,6 +128,7 @@ class SaveSelfRelatedBehavior extends \bvb\juncture\behaviors\SelfRelatedBehavio
                     ->execute();
             }
         }
+
         foreach($idsToAddByRelation as $selfRelationName => $selfRelatedIdsToAdd){
             foreach($selfRelatedIdsToAdd as $selfRelatedIdToAdd){
                 $junctureModel = new $this->selfRelatedJunctureModelClass;
@@ -128,5 +144,17 @@ class SaveSelfRelatedBehavior extends \bvb\juncture\behaviors\SelfRelatedBehavio
                 }
             }
         }
+    }
+
+    /**
+     * If there is a new record no need to ensure the relation is populated
+     * {@inheritdoc}
+     */
+    protected function ensureRelationPopulated($relationName = null, $taxonomyTermIdsFieldName = null)
+    {
+        if($this->ownerIsBeingCreated){
+            return;
+        }
+        parent::ensureRelationPopulated($relationName, $taxonomyTermIdsFieldName);
     }
 }
