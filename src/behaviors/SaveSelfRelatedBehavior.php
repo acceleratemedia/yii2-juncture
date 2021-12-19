@@ -3,7 +3,6 @@
 namespace bvb\juncture\behaviors;
 
 use Yii;
-use yii\db\BaseActiveRecord;
 use yii\web\ServerErrorHttpException;
 
 /**
@@ -37,9 +36,9 @@ class SaveSelfRelatedBehavior extends \bvb\juncture\behaviors\SelfRelatedBehavio
     public function events()
     {
         return array_merge(parent::events(), [
-            BaseActiveRecord::EVENT_BEFORE_VALIDATE => 'beforeValidate',
-            BaseActiveRecord::EVENT_AFTER_INSERT => 'afterSave',
-            BaseActiveRecord::EVENT_AFTER_UPDATE => 'afterSave',
+            \yii\db\BaseActiveRecord::EVENT_BEFORE_VALIDATE => 'beforeValidate',
+            \yii\db\BaseActiveRecord::EVENT_AFTER_INSERT => 'afterSave',
+            \yii\db\BaseActiveRecord::EVENT_AFTER_UPDATE => 'afterSave',
         ]);
     }
 
