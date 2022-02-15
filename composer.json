@@ -1,5 +1,5 @@
 {
-    "name": "brianvb/yii2-juncture",
+    "name": "acceleratemedia/yii2-juncture",
     "description": "Behavior and widgets for dealing with juncture relationships",
     "type": "yii2-extension",
     "require": {
