@@ -230,7 +230,7 @@ class JunctureField extends InputWidget
             $fieldConfigData = [
                 'attribute' => $junctureAttributeData['attribute'],
                 'newInput' => (!isset($junctureAttributeData['newInput']) || empty($junctureAttributeData['newInput'])) ? $this->getNewInput($junctureAttributeData) : $junctureAttributeData['newInput'],
-                'validator' => new JsExpression('function (attribute, value, messages, deferred, form) {'.implode($validationStrs, "\n").'}'),
+                'validator' => new JsExpression('function (attribute, value, messages, deferred, form) {'.implode("\n",$validationStrs).'}'),
                 'multiple' => false
             ];
 
