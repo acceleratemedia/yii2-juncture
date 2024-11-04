@@ -275,7 +275,7 @@ JAVASCRIPT;
         $junctureIdentifierShortname = strtolower($this->junctureModel->formName());
 
         // --- Set up a callback function each time a new record is added consisting of all of the
-        $callback = (!empty($callbacks)) ? 'function(){'.implode($callbacks, '').'}' : null;
+        $callback = (!empty($callbacks)) ? 'function(){' . implode('', $callbacks) . '}' : null;
 
         // --- The javascript going into document.ready is specific to this instance
         if(is_array($this->ownerPkColumnInJunctureTable)){
