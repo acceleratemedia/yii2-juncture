@@ -122,6 +122,29 @@ class InlineRepeaterField extends InputWidget
     {
         $this->registerAssets();
 
+        // Force DatePicker asset registration if needed
+        $hasDatepicker = false;
+        foreach ($this->childAttributes as $attrConfig) {
+            if (($attrConfig['input'] ?? null) === self::INPUT_DATEPICKER) {
+                $hasDatepicker = true;
+                break;
+            }
+        }
+
+        if ($hasDatepicker) {
+            // Register DatePicker assets even if no rows exist by rendering a hidden widget
+            // This ensures the JS/CSS are loaded for dynamically added rows. This really only
+            // matters if there are no existing rows, otherwise the assets will be loaded anyway.
+            DatePicker::widget([
+                'name' => 'dummy-datepicker-' . $this->getId(),
+                'options' => ['style' => 'display:none;'],
+                'pluginOptions' => [
+                    'autoclose' => true,
+                    'format' => 'yyyy-mm-dd'
+                ]
+            ]);
+        }
+
         $childModel = new $this->childModelClass();
         $childFormName = strtolower($childModel->formName());
 
