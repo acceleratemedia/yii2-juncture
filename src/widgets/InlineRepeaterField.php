@@ -146,13 +146,12 @@ class InlineRepeaterField extends InputWidget
         }
 
         $childModel = new $this->childModelClass();
-        $childFormName = strtolower($childModel->formName());
-
         $containerId = $this->getId() . '-container';
         $rowsContainerId = $this->getId() . '-rows';
 
         ob_start();
 ?>
+        <!-- This goes in the table cell -->
         <div id="<?= $containerId ?>" class="<?= $this->containerClass ?>" data-widget-id="<?= $this->getId() ?>">
             <button type="button" class="btn btn-sm btn-secondary inline-repeater-add mb-2" data-target="<?= $rowsContainerId ?>">
                 <?= $this->addButtonLabel ?>
@@ -163,25 +162,32 @@ class InlineRepeaterField extends InputWidget
                     Collapse / Expand
                 </a>
             <?php endif; ?>
-
-            <div id="<?= $rowsContainerId ?>" class="inline-repeater-rows <?= $this->collapsed ? 'collapse' : '' ?>">
-                <table class="table table-sm table-bordered">
-                    <thead>
-                        <tr>
-                            <?php foreach ($this->childAttributes as $attrConfig) : ?>
-                                <th><?= $childModel->getAttributeLabel($attrConfig['attribute']) ?></th>
-                            <?php endforeach; ?>
-                            <th width="50">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php foreach ($this->childRecords as $index => $childRecord) : ?>
-                            <?= $this->renderChildRow($childRecord, $index, $childFormName) ?>
-                        <?php endforeach; ?>
-                    </tbody>
-                </table>
-            </div>
         </div>
+
+        <!-- This will be inserted as a new full-width row -->
+        <script type="text/template" id="<?= $rowsContainerId ?>-template">
+            <tr class="inline-repeater-full-row <?= $this->collapsed ? 'collapse' : '' ?>" id="<?= $rowsContainerId ?>">
+            <td colspan="100%">
+                <div class="inline-repeater-rows">
+                    <table class="table table-sm table-bordered">
+                        <thead>
+                            <tr>
+                                <?php foreach ($this->childAttributes as $attrConfig) : ?>
+                                    <th><?= $childModel->getAttributeLabel($attrConfig['attribute']) ?></th>
+                                <?php endforeach; ?>
+                                <th width="50">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($this->childRecords as $index => $childRecord) : ?>
+                                <?= $this->renderChildRow($childRecord, $index, strtolower($childModel->formName())) ?>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </td>
+        </tr>
+    </script>
     <?php
         return ob_get_clean();
     }
@@ -306,14 +312,22 @@ class InlineRepeaterField extends InputWidget
     protected function registerAssets()
     {
         $widgetId = $this->getId();
-        $childModel = new $this->childModelClass();
+        $rowsContainerId = $widgetId . '-rows';
         $newRowTemplate = $this->getNewRowTemplate();
 
         $js = <<<JS
 (function() {
     let widgetId = '{$widgetId}';
     let container = $('#' + widgetId + '-container');
-    let rowsContainer = container.find('.inline-repeater-rows tbody');
+    let rowsContainerId = '{$rowsContainerId}';
+
+    // Insert the full-width row after the parent row on page load
+    let template = $('#' + rowsContainerId + '-template').html();
+    let parentRow = container.closest('tr');
+    parentRow.after(template);
+
+    let fullWidthRow = $('#' + rowsContainerId);
+    let rowsContainer = fullWidthRow.find('tbody');
     let rowCounter = rowsContainer.find('tr').length;
 
     // Add new row
@@ -324,20 +338,17 @@ class InlineRepeaterField extends InputWidget
         rowsContainer.append(newRow);
 
         // Show the rows container if collapsed
-        let rowsDiv = $('#' + widgetId + '-rows');
-        if (!rowsDiv.hasClass('show')) {
-            rowsDiv.collapse('show');
+        if (!fullWidthRow.hasClass('show')) {
+            fullWidthRow.collapse('show');
         }
 
         // Re-initialize date pickers for the newly added row
         let lastRow = rowsContainer.find('tr:last');
         lastRow.find('.krajee-datepicker').each(function() {
             let pickerElement = $(this);
-            // Destroy any existing datepicker instance first
             if (pickerElement.data('kvDatepicker')) {
                 pickerElement.kvDatepicker('destroy');
             }
-            // Initialize the datepicker
             pickerElement.kvDatepicker({
                 autoclose: true,
                 format: 'yyyy-mm-dd'
@@ -350,7 +361,7 @@ class InlineRepeaterField extends InputWidget
     // Delete row
     container.on('click', '.inline-repeater-delete', function(e) {
         e.preventDefault();
-        if (confirm('Are you sure you want to delete this bonus?')) {
+        if (confirm('Are you sure you want to delete this item?')) {
             $(this).closest('tr').remove();
         }
     });
@@ -358,7 +369,7 @@ class InlineRepeaterField extends InputWidget
     // Toggle collapse
     container.on('click', '.inline-repeater-toggle', function(e) {
         e.preventDefault();
-        $('#' + widgetId + '-rows').collapse('toggle');
+        fullWidthRow.collapse('toggle');
     });
 })();
 JS;
