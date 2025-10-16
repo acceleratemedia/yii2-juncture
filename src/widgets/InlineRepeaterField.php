@@ -151,7 +151,6 @@ class InlineRepeaterField extends InputWidget
 
         ob_start();
 ?>
-        <!-- This goes in the table cell -->
         <div id="<?= $containerId ?>" class="<?= $this->containerClass ?>" data-widget-id="<?= $this->getId() ?>">
             <button type="button" class="btn btn-sm btn-secondary inline-repeater-add mb-2" data-target="<?= $rowsContainerId ?>">
                 <?= $this->addButtonLabel ?>
@@ -160,34 +159,36 @@ class InlineRepeaterField extends InputWidget
             <?php if ($this->collapsed) : ?>
                 <a href="#" class="inline-repeater-toggle ml-2" data-target="<?= $rowsContainerId ?>">
                     Collapse / Expand
+                    <span class="badge badge-info row-count">
+                        <?= count($this->childRecords) ?>
+                    </span>
                 </a>
             <?php endif; ?>
         </div>
 
-        <!-- This will be inserted as a new full-width row -->
-        <script type="text/template" id="<?= $rowsContainerId ?>-template">
+        <div id="<?= $rowsContainerId ?>-template" style="display:none;">
             <tr class="inline-repeater-full-row <?= $this->collapsed ? 'collapse' : '' ?>" id="<?= $rowsContainerId ?>">
-            <td colspan="100%">
-                <div class="inline-repeater-rows">
-                    <table class="table table-sm table-bordered">
-                        <thead>
-                            <tr>
-                                <?php foreach ($this->childAttributes as $attrConfig) : ?>
-                                    <th><?= $childModel->getAttributeLabel($attrConfig['attribute']) ?></th>
+                <td colspan="100%">
+                    <div class="inline-repeater-rows">
+                        <table class="table table-sm table-bordered">
+                            <thead>
+                                <tr>
+                                    <?php foreach ($this->childAttributes as $attrConfig) : ?>
+                                        <th><?= $childModel->getAttributeLabel($attrConfig['attribute']) ?></th>
+                                    <?php endforeach; ?>
+                                    <th width="50">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php foreach ($this->childRecords as $index => $childRecord) : ?>
+                                    <?= $this->renderChildRow($childRecord, $index, strtolower($childModel->formName())) ?>
                                 <?php endforeach; ?>
-                                <th width="50">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <?php foreach ($this->childRecords as $index => $childRecord) : ?>
-                                <?= $this->renderChildRow($childRecord, $index, strtolower($childModel->formName())) ?>
-                            <?php endforeach; ?>
-                        </tbody>
-                    </table>
-                </div>
-            </td>
-        </tr>
-    </script>
+                            </tbody>
+                        </table>
+                    </div>
+                </td>
+            </tr>
+        </div>
     <?php
         return ob_get_clean();
     }
@@ -263,21 +264,52 @@ class InlineRepeaterField extends InputWidget
 
         $fieldHtml = $hiddenFields;
 
+        // Use JunctureField's approach - use ActiveField for all fields to get automatic validation
+        $activeFieldOptions = [
+            'template' => '{input}{error}',
+            'selectors' => [
+                'input' => '#' . $fieldId,
+                'container' => '#' . $fieldId . '-container',
+            ],
+            'options' => [
+                'id' => $fieldId . '-container',
+                'validation_id' => $fieldId
+            ]
+        ];
+
+        // Check if field is required and add to inputOptions
+        $isRequired = false;
+        foreach ($childRecord->rules() as $rule) {
+            if (is_array($rule) && isset($rule[0]) && isset($rule[1])) {
+                $attributes = is_array($rule[0]) ? $rule[0] : [$rule[0]];
+                if (in_array($attribute, $attributes) && $rule[1] === 'required') {
+                    $isRequired = true;
+                    break;
+                }
+            }
+        }
+
+        if ($isRequired) {
+            $inputOptions['required'] = true;
+        }
+
+        $activeField = $this->form->field($childRecord, $attribute, $activeFieldOptions);
+
+        // Register validation using JunctureField's approach
+        $this->registerChildFieldValidation($childRecord, $attribute, $fieldId, $fieldName);
+
         switch ($inputType) {
             case self::INPUT_TEXTAREA:
-                $fieldHtml .= Html::textarea($fieldName, $childRecord->{$attribute}, $inputOptions);
+                $fieldHtml .= $activeField->textArea($inputOptions);
                 break;
 
             case self::INPUT_DROPDOWN:
                 $data = $attrConfig['data'] ?? [];
-                $fieldHtml .= Html::dropDownList($fieldName, $childRecord->{$attribute}, $data, $inputOptions);
+                $fieldHtml .= $activeField->dropDownList($data, $inputOptions);
                 break;
 
             case self::INPUT_DATEPICKER:
-                $fieldHtml .= $this->form->field($childRecord, $attribute, [
-                    'template' => '{input}',
-                    'options' => ['tag' => false]
-                ])->widget(DatePicker::class, [
+                $fieldHtml .= $activeField->widget(DatePicker::class, [
                     'options' => $inputOptions,
                     'pluginOptions' => [
                         'autoclose' => true,
@@ -288,10 +320,7 @@ class InlineRepeaterField extends InputWidget
 
             case self::INPUT_SELECT2:
                 $data = $attrConfig['data'] ?? [];
-                $fieldHtml .= $this->form->field($childRecord, $attribute, [
-                    'template' => '{input}',
-                    'options' => ['tag' => false]
-                ])->widget(Select2::class, [
+                $fieldHtml .= $activeField->widget(Select2::class, [
                     'data' => $data,
                     'options' => $inputOptions
                 ]);
@@ -299,11 +328,40 @@ class InlineRepeaterField extends InputWidget
 
             default:
             case self::INPUT_TEXT:
-                $fieldHtml .= Html::textInput($fieldName, $childRecord->{$attribute}, $inputOptions);
+                $fieldHtml .= $activeField->textInput($inputOptions);
                 break;
         }
 
         return $fieldHtml;
+    }
+
+    /**
+     * Register validation for a child field using JunctureField's approach
+     */
+    protected function registerChildFieldValidation($childRecord, $attribute, $fieldId, $fieldName)
+    {
+        // Get validation rules from the model
+        $validationStrs = [];
+        $validators = $childRecord->getActiveValidators($attribute);
+        foreach ($validators as $validator) {
+            $validationStrs[] = $validator->clientValidateAttribute($childRecord, $attribute, $this->getView());
+        }
+
+        // Create validation config similar to JunctureField
+        $validationConfig = [
+            'id' => $fieldId,
+            'name' => $fieldName,
+            'container' => '.field-' . $fieldId,
+            'input' => '#' . $fieldId,
+            'error' => '.invalid-feedback',
+            'validate' => new \yii\web\JsExpression('function (attribute, value, messages, deferred, form) {' . implode("\n", $validationStrs) . '}')
+        ];
+
+        // Register the validation using JunctureField's exact approach
+        $this->getView()->registerJs(
+            "validateNewDynamicField(" . \yii\helpers\Json::encode(array_merge($validationConfig, ['formId' => '#' . $this->form->id])) . ");",
+            \yii\web\View::POS_END
+        );
     }
 
     /**
@@ -316,6 +374,20 @@ class InlineRepeaterField extends InputWidget
         $newRowTemplate = $this->getNewRowTemplate();
 
         $js = <<<JS
+// Copy of JunctureField's validateNewDynamicField function
+function validateNewDynamicField(config)
+{
+    var validationConfig = {
+        id: config.id,
+        name: config.name,
+        container: config.container,
+        input: config.input,
+        error: ".invalid-feedback",
+        validate:  config.validator
+    };
+    $(config.formId).yiiActiveForm("add", validationConfig);
+}
+
 (function() {
     let widgetId = '{$widgetId}';
     let container = $('#' + widgetId + '-container');
@@ -356,13 +428,16 @@ class InlineRepeaterField extends InputWidget
         });
 
         rowCounter++;
+        container.find('.row-count').text(rowCounter);
     });
 
     // Delete row
-    container.on('click', '.inline-repeater-delete', function(e) {
+    fullWidthRow.on('click', '.inline-repeater-delete', function(e) {
         e.preventDefault();
         if (confirm('Are you sure you want to delete this item?')) {
             $(this).closest('tr').remove();
+            rowCounter--;
+            container.find('.row-count').text(rowCounter);
         }
     });
 
@@ -374,7 +449,7 @@ class InlineRepeaterField extends InputWidget
 })();
 JS;
 
-        $this->getView()->registerJs($js, View::POS_LOAD); // POS_READY didn't work for some reason, and since we're using jQuery we can't use POS_END either.
+        $this->getView()->registerJs($js, View::POS_READY);
     }
 
     /**
@@ -395,11 +470,30 @@ JS;
             $fieldName = $this->namePrefix . '[' . $this->childAttributeName . '][INDEX_PLACEHOLDER][' . $attribute . ']';
             $fieldId = $this->getId() . '-' . $attribute . '-INDEX_PLACEHOLDER';
 
+            // Check if this field is required
+            $isRequired = false;
+            $childModel = new $this->childModelClass();
+            foreach ($childModel->rules() as $rule) {
+                if (is_array($rule) && isset($rule[0]) && isset($rule[1])) {
+                    $attributes = is_array($rule[0]) ? $rule[0] : [$rule[0]];
+                    $validator = $rule[1];
+                    if (in_array($attribute, $attributes) && $validator === 'required') {
+                        $isRequired = true;
+                        break;
+                    }
+                }
+            }
+
             $inputOptions = ArrayHelper::merge([
                 'id' => $fieldId,
                 'name' => $fieldName,
                 'class' => 'form-control form-control-sm'
             ], $attrConfig['inputOptions'] ?? []);
+
+            // Add required attribute if field is required
+            if ($isRequired) {
+                $inputOptions['required'] = true;
+            }
 
             $rowHtml .= '<td>';
 
@@ -411,6 +505,9 @@ JS;
                     'data-fk-column' => $fkColumn
                 ]);
             }
+
+            // Wrap field in proper container for validation
+            $rowHtml .= '<div class="field-' . $fieldId . '">';
 
             switch ($inputType) {
                 case self::INPUT_TEXTAREA:
@@ -437,7 +534,7 @@ JS;
                     break;
             }
 
-            $rowHtml .= '</td>';
+            $rowHtml .= '</div></td>';
         }
 
         $rowHtml .= '<td><button type="button" class="btn btn-sm btn-danger inline-repeater-delete"><i class="fas fa-trash"></i></button></td>';
