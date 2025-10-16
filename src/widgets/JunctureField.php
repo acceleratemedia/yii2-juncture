@@ -290,6 +290,11 @@ JAVASCRIPT;
                 $callbacks[$callbackKey] = new JsExpression($junctureAttributeData['initCallback']);
             }
 
+            // --- Skip validation registration for INPUT_WIDGET types as they handle their own validation
+            if ($junctureAttributeData['input'] == self::INPUT_WIDGET) {
+                continue;
+            }
+
             $fieldsConfigData[] = $fieldConfigData;
         }
 

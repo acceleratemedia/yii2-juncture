@@ -68,33 +68,11 @@ $junctureIdentifierShortname = strtolower($junctureModel->formName());
                             <span class="display-attribute"><?= $junctureModel->{$relationNameInJunctureModel}->{$junctureRelationDisplayAttribute}; ?></span>
                         </td>
                         <?php
-
-
-                        // --- Loop through all juncture atrtibtues
+                        // --- Loop through all juncture attributes
                         foreach ($junctureAttributes as $junctureAttributeData) : // --- Renders the existing values
                             // --- Get a unique id and name for each based on juncture relationships
                             $inputId = Html::getInputId($junctureModel, $junctureAttributeData['attribute']) . '-' . $junctureModel->{$relatedPksColumnInJunctureTable};
                             $inputName = $modelFormName . '[' . $additionalJunctureDataProp . '][' . $junctureModel->{$relatedPksColumnInJunctureTable} . '][' . $junctureAttributeData['attribute'] . ']';
-
-                            // --- Set some defaults for the activefield
-                            $activeFieldDefaultOptions = [
-                                'template' => '{input}{error}',
-                                'selectors' => [
-                                    'input' => '#' . $inputId,
-                                    'container' => '#' . $inputId . '-container',
-                                ],
-                                'options' => [
-                                    'id' => $inputId . '-container',
-                                    'validation_id' => $inputId
-                                ]
-                            ];
-
-                            // --- If there was configuraiton for the active field options passed in merge them
-                            $activeFieldOptions = (isset($junctureAttributeData['activeFieldOptions'])) ?
-                                ArrayHelper::merge($activeFieldDefaultOptions, $junctureAttributeData['activeFieldOptions']) :
-                                $activeFieldDefaultOptions;
-
-                            $activeFieldDefault = $form->field($junctureModel, $junctureAttributeData['attribute'], $activeFieldOptions);
 
                             $inputOptionsDefaults = [
                                 'name' => $inputName,
@@ -107,26 +85,8 @@ $junctureIdentifierShortname = strtolower($junctureModel->formName());
                         ?>
                             <td>
                                 <?php
-                                if ($junctureAttributeData['input'] == JunctureField::INPUT_DROPDOWN) {
-                                    echo $activeFieldDefault->dropDownList($junctureAttributeData['data'], $inputOptionsDefaults);
-                                } elseif ($junctureAttributeData['input'] == JunctureField::INPUT_TEXT) {
-                                    echo $activeFieldDefault->textInput($inputOptionsDefaults);
-                                } elseif ($junctureAttributeData['input'] == JunctureField::INPUT_TEXTAREA) {
-                                    echo $activeFieldDefault->textArea($inputOptionsDefaults);
-                                } elseif ($junctureAttributeData['input'] == JunctureField::INPUT_DATEPICKER) {
-                                    echo $activeFieldDefault->widget(DatePicker::class, [
-                                        'options' => $inputOptionsDefaults,
-                                        'pluginOptions' => [
-                                            'autoclose' => true,
-                                            'format' => 'yyyy-mm-dd'
-                                        ]
-                                    ]);
-                                } elseif ($junctureAttributeData['input'] == JunctureField::INPUT_SELECT2) {
-                                    echo $activeFieldDefault->widget(Select2::class, [
-                                        'data' => $junctureAttributeData['data'],
-                                        'options' => $inputOptionsDefaults
-                                    ]);
-                                } elseif ($junctureAttributeData['input'] == JunctureField::INPUT_WIDGET) {
+                                // For INPUT_WIDGET, render directly without ActiveField to avoid validation registration
+                                if ($junctureAttributeData['input'] == JunctureField::INPUT_WIDGET) {
                                     // --- Handle custom widgets
                                     if (!isset($junctureAttributeData['widgetClass'])) {
                                         throw new InvalidConfigException('The "widgetClass" property must be set when using INPUT_WIDGET type.');
@@ -157,7 +117,50 @@ $junctureIdentifierShortname = strtolower($junctureModel->formName());
                                         }
                                     }
 
-                                    echo $activeFieldDefault->widget($junctureAttributeData['widgetClass'], $widgetOptions);
+                                    // Render widget directly without ActiveField
+                                    $widgetOptions['name'] = $inputName;
+                                    echo $junctureAttributeData['widgetClass']::widget($widgetOptions);
+                                } else {
+                                    // For non-widget fields, use ActiveField as before
+                                    $activeFieldDefaultOptions = [
+                                        'template' => '{input}{error}',
+                                        'selectors' => [
+                                            'input' => '#' . $inputId,
+                                            'container' => '#' . $inputId . '-container',
+                                        ],
+                                        'options' => [
+                                            'id' => $inputId . '-container',
+                                            'validation_id' => $inputId
+                                        ]
+                                    ];
+
+                                    // --- If there was configuration for the active field options passed in merge them
+                                    $activeFieldOptions = (isset($junctureAttributeData['activeFieldOptions'])) ?
+                                        ArrayHelper::merge($activeFieldDefaultOptions, $junctureAttributeData['activeFieldOptions']) :
+                                        $activeFieldDefaultOptions;
+
+                                    $activeFieldDefault = $form->field($junctureModel, $junctureAttributeData['attribute'], $activeFieldOptions);
+
+                                    if ($junctureAttributeData['input'] == JunctureField::INPUT_DROPDOWN) {
+                                        echo $activeFieldDefault->dropDownList($junctureAttributeData['data'], $inputOptionsDefaults);
+                                    } elseif ($junctureAttributeData['input'] == JunctureField::INPUT_TEXT) {
+                                        echo $activeFieldDefault->textInput($inputOptionsDefaults);
+                                    } elseif ($junctureAttributeData['input'] == JunctureField::INPUT_TEXTAREA) {
+                                        echo $activeFieldDefault->textArea($inputOptionsDefaults);
+                                    } elseif ($junctureAttributeData['input'] == JunctureField::INPUT_DATEPICKER) {
+                                        echo $activeFieldDefault->widget(DatePicker::class, [
+                                            'options' => $inputOptionsDefaults,
+                                            'pluginOptions' => [
+                                                'autoclose' => true,
+                                                'format' => 'yyyy-mm-dd'
+                                            ]
+                                        ]);
+                                    } elseif ($junctureAttributeData['input'] == JunctureField::INPUT_SELECT2) {
+                                        echo $activeFieldDefault->widget(Select2::class, [
+                                            'data' => $junctureAttributeData['data'],
+                                            'options' => $inputOptionsDefaults
+                                        ]);
+                                    }
                                 }
                                 ?>
                             </td>
