@@ -383,7 +383,7 @@ function validateNewDynamicField(config)
         container: config.container,
         input: config.input,
         error: ".invalid-feedback",
-        validate:  config.validator
+        validate:  config.validate
     };
     $(config.formId).yiiActiveForm("add", validationConfig);
 }
