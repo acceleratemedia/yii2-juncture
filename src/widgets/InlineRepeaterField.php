@@ -25,6 +25,7 @@ class InlineRepeaterField extends InputWidget
     const INPUT_TEXTAREA = 'textArea';
     const INPUT_DATEPICKER = 'datepicker';
     const INPUT_SELECT2 = 'select2';
+    const INPUT_WIDGET = 'widget';
 
     /**
      * @var \yii\widgets\ActiveForm
@@ -295,8 +296,10 @@ class InlineRepeaterField extends InputWidget
 
         $activeField = $this->form->field($childRecord, $attribute, $activeFieldOptions);
 
-        // Register validation using JunctureField's approach
-        $this->registerChildFieldValidation($childRecord, $attribute, $fieldId, $fieldName);
+        // Register validation using JunctureField's approach (skip for widgets as they handle their own validation)
+        if ($inputType !== self::INPUT_WIDGET) {
+            $this->registerChildFieldValidation($childRecord, $attribute, $fieldId, $fieldName);
+        }
 
         switch ($inputType) {
             case self::INPUT_TEXTAREA:
@@ -324,6 +327,19 @@ class InlineRepeaterField extends InputWidget
                     'data' => $data,
                     'options' => $inputOptions
                 ]);
+                break;
+
+            case self::INPUT_WIDGET:
+                // Handle custom widgets using ActiveField like JunctureField's getNewInput() method
+                if (!isset($attrConfig['widgetClass'])) {
+                    throw new InvalidConfigException('The "widgetClass" property must be set when using INPUT_WIDGET type.');
+                }
+
+                $widgetOptions = $attrConfig['widgetOptions'] ?? [];
+                $widgetOptions['options'] = $inputOptions;
+
+                // Render widget through ActiveField
+                $fieldHtml .= $activeField->widget($attrConfig['widgetClass'], $widgetOptions);
                 break;
 
             default:
@@ -372,6 +388,17 @@ class InlineRepeaterField extends InputWidget
         $widgetId = $this->getId();
         $rowsContainerId = $widgetId . '-rows';
         $newRowTemplate = $this->getNewRowTemplate();
+
+        // Collect widget initialization callbacks
+        $widgetCallbacks = [];
+        foreach ($this->childAttributes as $attrConfig) {
+            if (($attrConfig['input'] ?? null) === self::INPUT_WIDGET && isset($attrConfig['initCallback'])) {
+                $widgetCallbacks[] = [
+                    'attribute' => $attrConfig['attribute'],
+                    'callback' => $attrConfig['initCallback']
+                ];
+            }
+        }
 
         $js = <<<JS
 // Copy of JunctureField's validateNewDynamicField function
@@ -427,6 +454,9 @@ function validateNewDynamicField(config)
             });
         });
 
+        // Execute widget initialization callbacks if any
+        {$this->renderWidgetCallbacks($widgetCallbacks)}
+
         rowCounter++;
         container.find('.row-count').text(rowCounter);
     });
@@ -450,6 +480,43 @@ function validateNewDynamicField(config)
 JS;
 
         $this->getView()->registerJs($js, View::POS_READY);
+    }
+
+    /**
+     * Render widget initialization callbacks as JavaScript
+     * @param array $widgetCallbacks Array of callback configurations
+     * @return string JavaScript code to execute callbacks
+     */
+    protected function renderWidgetCallbacks($widgetCallbacks)
+    {
+        if (empty($widgetCallbacks)) {
+            return '';
+        }
+
+        $callbackJs = '';
+        foreach ($widgetCallbacks as $callback) {
+            $attribute = $callback['attribute'];
+            $callbackExpression = $callback['callback'];
+
+            // Convert JsExpression to string if needed
+            $callbackStr = ($callbackExpression instanceof \yii\web\JsExpression)
+                ? $callbackExpression->expression
+                : (string)$callbackExpression;
+
+            // Generate code to find the widget element in the last row and execute callback
+            // Inline the widgetElement variable directly into the callback expression
+            $callbackJs .= "
+        // Initialize {$attribute} widget
+        (function() {
+            let widgetElement = lastRow.find('[id*=\"-{$attribute}-\"]').first();
+            if (widgetElement.length) {
+                {$callbackStr}
+            }
+        })();
+";
+        }
+
+        return $callbackJs;
     }
 
     /**
@@ -526,6 +593,35 @@ JS;
                 case self::INPUT_SELECT2:
                     $data = $attrConfig['data'] ?? [];
                     $rowHtml .= Html::dropDownList($fieldName, null, $data, $inputOptions);
+                    break;
+
+                case self::INPUT_WIDGET:
+                    // For widgets, use ActiveField like JunctureField's getNewInput() method
+                    if (!isset($attrConfig['widgetClass'])) {
+                        throw new InvalidConfigException('The "widgetClass" property must be set when using INPUT_WIDGET type.');
+                    }
+
+                    // Create a temporary model instance for rendering
+                    $tempModel = new $this->childModelClass();
+
+                    $activeFieldOptions = [
+                        'template' => '{input}{error}',
+                        'enableClientValidation' => false
+                    ];
+
+                    $activeField = $this->form->field($tempModel, $attribute, $activeFieldOptions);
+
+                    $widgetOptions = $attrConfig['widgetOptions'] ?? [];
+                    $widgetOptions['options'] = $inputOptions;
+
+                    // Render the widget through ActiveField and get the HTML
+                    $widgetHtml = $activeField->widget($attrConfig['widgetClass'], $widgetOptions)->render();
+
+                    // Replace the model's field ID with our dynamic field ID
+                    $tempFieldId = Html::getInputId($tempModel, $attribute);
+                    $widgetHtml = str_replace($tempFieldId, $fieldId, $widgetHtml);
+
+                    $rowHtml .= $widgetHtml;
                     break;
 
                 default:
