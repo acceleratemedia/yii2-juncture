@@ -175,7 +175,7 @@ class InlineRepeaterField extends InputWidget
                             <thead>
                                 <tr>
                                     <?php foreach ($this->childAttributes as $attrConfig) : ?>
-                                        <th><?= $childModel->getAttributeLabel($attrConfig['attribute']) ?></th>
+                                        <th><?= isset($attrConfig['label']) ? $attrConfig['label'] : $childModel->getAttributeLabel($attrConfig['attribute']) ?></th>
                                     <?php endforeach; ?>
                                     <th width="50">Actions</th>
                                 </tr>
