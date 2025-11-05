@@ -244,10 +244,75 @@ class JunctureField extends InputWidget
             }
 
             // --- Set up the config for this field which will be used in the javascript
+            // --- Wrap the validator to ensure it receives the correct value from the actual input element
+            $validationJs = !empty($validationStrs) ? implode("\n", $validationStrs) : '';
+            $validatorWrapper = 'function (attribute, value, messages, deferred, form) {
+                // Try multiple ways to find the element to ensure we get the right one
+                var inputElement = null;
+                var inputSelector = attribute.input;
+
+                // First try the selector from attribute.input
+                if (inputSelector) {
+                    inputElement = jQuery(inputSelector);
+                }
+
+                // If not found, try by ID
+                if (!inputElement || inputElement.length === 0) {
+                    inputElement = jQuery("#" + attribute.id);
+                }
+
+                // If still not found, try by name
+                if (!inputElement || inputElement.length === 0) {
+                    inputElement = jQuery("[name=\'" + attribute.name + "\']");
+                }
+
+                if (inputElement && inputElement.length > 0) {
+                    // CRITICAL FIX: Use the cached value from yiiActiveForm if DOM reading fails
+                    // The cached value is being updated correctly by our event handlers
+                    var actualValue = "";
+
+                    // First, try to read from the cached value (which is being updated as user types)
+                    if (attribute.value !== undefined && attribute.value !== null && attribute.value !== "") {
+                        actualValue = String(attribute.value);
+                    } else {
+                        // Fallback to reading from DOM
+                        if (inputElement.is("input[type=text], input[type=number], textarea")) {
+                            actualValue = inputElement[0].value || "";
+                        } else if (inputElement.is("select")) {
+                            actualValue = inputElement.val() || "";
+                        } else if (inputElement.is(":checkbox, :radio")) {
+                            actualValue = inputElement.filter(":checked").val() || "";
+                        } else {
+                            actualValue = inputElement.val() || "";
+                        }
+                    }
+
+                    // Also try jQuery val() as another fallback
+                    if (!actualValue || actualValue === "") {
+                        actualValue = inputElement.val() || "";
+                    }
+
+                    // Final fallback: use the cached attribute.value if everything else fails
+                    if (!actualValue || actualValue === "") {
+                        actualValue = attribute.value || "";
+                    }
+
+                    // Use the actual value for validation - override whatever was passed in
+                    value = actualValue !== null && actualValue !== undefined ? String(actualValue) : "";
+                } else {
+                    // Fallback to cached value even if element not found
+                    if (attribute.value !== undefined && attribute.value !== null) {
+                        value = String(attribute.value);
+                    }
+                }
+
+                ' . $validationJs . '
+            }';
+
             $fieldConfigData = [
                 'attribute' => $junctureAttributeData['attribute'],
                 'newInput' => (!isset($junctureAttributeData['newInput']) || empty($junctureAttributeData['newInput'])) ? $this->getNewInput($junctureAttributeData) : $junctureAttributeData['newInput'],
-                'validator' => new JsExpression('function (attribute, value, messages, deferred, form) {' . implode("\n", $validationStrs) . '}'),
+                'validator' => new JsExpression($validatorWrapper),
                 'multiple' => false
             ];
 
@@ -332,108 +397,125 @@ JAVASCRIPT;
 
         $newJunctureDataConfigJson = Json::encode($newJunctureDataConfig);
 
-        $rowId = (is_array($this->ownerPkColumnInJunctureTable)) ? implode('-', $this->ownerPkColumnInJunctureTable) : $this->ownerPkColumnInJunctureTable;
+        $rowId = (is_array($this->ownerPkColumnInJunctureTable)) ? implode('-', (array)$this->ownerPkColumnInJunctureTable) : $this->ownerPkColumnInJunctureTable;
         $ready_js = <<<JAVASCRIPT
-$("[data-toggle=tooltip]").tooltip({placement: "auto"});
-$("#{$fieldId}").on("select2:select", function(e){
-    addNewJunctureData({$newJunctureDataConfigJson})
-});
+            $("[data-toggle=tooltip]").tooltip({placement: "auto"});
+            $("#{$fieldId}").on("select2:select", function(e){
+                addNewJunctureData({$newJunctureDataConfigJson})
+            });
 
-$("#{$fieldId}").on("select2:unselect", function(e){
-    var data = e.params.data;
-    $("#{$junctureIdentifierShortname}-table tbody tr#{$rowId}-{$modelIdentifier}-{$this->relatedPksColumnInJunctureTable}-"+data.id).remove();
-});
-JAVASCRIPT;
+            $("#{$fieldId}").on("select2:unselect", function(e){
+                var data = e.params.data;
+                $("#{$junctureIdentifierShortname}-table tbody tr#{$rowId}-{$modelIdentifier}-{$this->relatedPksColumnInJunctureTable}-"+data.id).remove();
+            });
+        JAVASCRIPT;
         $this->getView()->registerJs($ready_js);
 
         // --- This javascript is global to this ui functionality
         $js = <<<JAVASCRIPT
-function validateNewDynamicField(config)
-{
-    var validationConfig = {
-        id: config.id,
-        name: config.name,
-        container: config.container,
-        input: config.input,
-        error: ".invalid-feedback",
-        validate:  config.validator
-    };
-    $(config.formId).yiiActiveForm("add", validationConfig);
-}
-
-function addNewJunctureData(config)
-{
-    // --- Get the data from the select element
-    var data = config.selectedData;
-
-    // --- Create a hidden input with the id of the juncture related model
-    var hiddenInput = $("<input>").attr({
-        type: "hidden",
-        name: config.modelFormName+"["+config.additionalJunctureDataProp+"]["+data.id+"]["+config.relatedPksColumnInJunctureTable+"]",
-        id: config.junctureIdentifierShortname+"-"+config.relatedPksColumnInJunctureTable+"-"+data.id,
-        value: data.id
-    });
-
-    // --- Create a label cell with the id field and the label
-    var labelCell = $("<td></td>")
-        .append(hiddenInput)
-        .append("<span class=\"display-attribute\">"+data.text+"</span>");
-
-    // --- Create a new row with the label cell
-    var newRow = $("<tr></tr>")
-        .attr("id", config.ownerPkColumnInJunctureTable+"-"+config.modelId+"-"+config.relatedPksColumnInJunctureTable+"-"+data.id)
-        .append(labelCell);
-
-    // --- Append all of the juncture fields that need input to the row
-    $.each(config.attributeConfigData, function(idx, attributeConfigData){
-        var newInput = $(attributeConfigData.newInput);
-
-        // --- Update the "field" class used by Yii to add the ID to the end and update the
-        // --- class of the container of the new input to specify this
-        var newInput_container_classes = newInput.attr("class").split(/\s+/);
-        var newClasses = [];
-        $.each(newInput_container_classes, function(index, item){
-            if (item === "field-"+config.junctureIdentifierShortname+"-"+attributeConfigData.attribute.toLowerCase()) {
-                item += "-"+data.id;
+            function validateNewDynamicField(config)
+            {
+                var validationConfig = {
+                    id: config.id,
+                    name: config.name,
+                    container: config.container,
+                    input: config.input,
+                    error: ".invalid-feedback",
+                    validate:  config.validator
+                };
+                $(config.formId).yiiActiveForm("add", validationConfig);
             }
-            newClasses.push(item)
-        });
-        $(newInput).attr("class", newClasses.join(" "));
 
-        // --- Update the name of the new input to include the id of the juncture relation
-        var newInputId = config.junctureIdentifierShortname+"-"+attributeConfigData.attribute.toLowerCase()+"-"+data.id;;
-        var newInputName = config.modelFormName+"["+config.additionalJunctureDataProp+"]["+data.id+"]["+attributeConfigData.attribute+"]";
-        if(attributeConfigData.multiple){
-            newInputName += "[]";
-        }
+            function addNewJunctureData(config)
+            {
+                // --- Get the data from the select element
+                var data = config.selectedData;
 
-        $("select, input[type!=hidden], textarea", newInput)
-            .attr("name", newInputName)
-            .attr("id", newInputId);
-        var newRowCell = $("<td></td>")
-            .append(newInput);
-        newRow.append(newRowCell);
+                // --- Create a hidden input with the id of the juncture related model
+                var hiddenInput = $("<input>").attr({
+                    type: "hidden",
+                    name: config.modelFormName+"["+config.additionalJunctureDataProp+"]["+data.id+"]["+config.relatedPksColumnInJunctureTable+"]",
+                    id: config.junctureIdentifierShortname+"-"+config.relatedPksColumnInJunctureTable+"-"+data.id,
+                    value: data.id
+                });
 
-        // --- Add form validation for the new field
-        validateNewDynamicField({
-            formId: config.formId,
-            id: newInputId,
-            name: newInputName,
-            container: ".field-"+config.junctureIdentifierShortname+"-"+attributeConfigData.attribute.toLowerCase()+"-"+data.id,
-            input: "#"+newInputId,
-            validator: attributeConfigData.validator
-        });
-    });
+                // --- Create a label cell with the id field and the label
+                var labelCell = $("<td></td>")
+                    .append(hiddenInput)
+                    .append("<span class=\"display-attribute\">"+data.text+"</span>");
 
-    // --- Append the new row to the table
-    $("#"+config.junctureIdentifierShortname+"-table tbody").append(newRow);
+                // --- Create a new row with the label cell
+                var newRow = $("<tr></tr>")
+                    .attr("id", config.ownerPkColumnInJunctureTable+"-"+config.modelId+"-"+config.relatedPksColumnInJunctureTable+"-"+data.id)
+                    .append(labelCell);
 
-    // --- Run the callback if there is one
-    if(config.callback){
-        config.callback();
-    }
-}
-JAVASCRIPT;
+                // --- Append all of the juncture fields that need input to the row
+                $.each(config.attributeConfigData, function(idx, attributeConfigData){
+                    var newInput = $(attributeConfigData.newInput);
+
+                    // --- Update the "field" class used by Yii to add the ID to the end and update the
+                    // --- class of the container of the new input to specify this
+                    var newInput_container_classes = newInput.attr("class").split(/\s+/);
+                    var newClasses = [];
+                    $.each(newInput_container_classes, function(index, item){
+                        if (item === "field-"+config.junctureIdentifierShortname+"-"+attributeConfigData.attribute.toLowerCase()) {
+                            item += "-"+data.id;
+                        }
+                        newClasses.push(item)
+                    });
+                    $(newInput).attr("class", newClasses.join(" "));
+
+                    // --- Update the name of the new input to include the id of the juncture relation
+                    var newInputId = config.junctureIdentifierShortname+"-"+attributeConfigData.attribute.toLowerCase()+"-"+data.id;;
+                    var newInputName = config.modelFormName+"["+config.additionalJunctureDataProp+"]["+data.id+"]["+attributeConfigData.attribute+"]";
+                    if(attributeConfigData.multiple){
+                        newInputName += "[]";
+                    }
+
+                    var actualInput = $("select, input[type!=hidden], textarea", newInput);
+                    actualInput.attr("name", newInputName)
+                        .attr("id", newInputId);
+                    var newRowCell = $("<td></td>")
+                        .append(newInput);
+                    newRow.append(newRowCell);
+
+                    // --- Add form validation for the new field
+                    validateNewDynamicField({
+                        formId: config.formId,
+                        id: newInputId,
+                        name: newInputName,
+                        container: ".field-"+config.junctureIdentifierShortname+"-"+attributeConfigData.attribute.toLowerCase()+"-"+data.id,
+                        input: "#"+newInputId,
+                        validator: attributeConfigData.validator
+                    });
+
+                    // --- CRITICAL FIX: Hook into input events to update yiiActiveForm's cached value
+                    // --- This ensures that when validation runs, it has the current value
+                    actualInput.on('input change keyup blur', function() {
+                        var formElement = jQuery(config.formId);
+                        if (formElement.data('yiiActiveForm')) {
+                            var attributes = formElement.data('yiiActiveForm').attributes;
+                            for (var i = 0; i < attributes.length; i++) {
+                                if (attributes[i].id === newInputId) {
+                                    // Force update the cached value in yiiActiveForm
+                                    var currentValue = jQuery(this).val();
+                                    attributes[i].value = currentValue;
+                                    break;
+                                }
+                            }
+                        }
+                    });
+                });
+
+                // --- Append the new row to the table
+                $("#"+config.junctureIdentifierShortname+"-table tbody").append(newRow);
+
+                // --- Run the callback if there is one
+                if(config.callback){
+                    config.callback();
+                }
+            }
+        JAVASCRIPT;
 
         $this->getView()->registerJs($js, View::POS_END, 'add-juncture-record');
     }
