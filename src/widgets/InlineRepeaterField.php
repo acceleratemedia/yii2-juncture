@@ -259,11 +259,13 @@ class InlineRepeaterField extends InputWidget
                     <div class="row">
                         <?php foreach ($separated['expandable'] as $attrConfig) : ?>
                             <div class="col-md-6 mb-2">
-                                <label class="form-label small">
-                                    <?php
-                                    $childModel = new $this->childModelClass();
-                                    echo isset($attrConfig['label']) ? $attrConfig['label'] : $childModel->getAttributeLabel($attrConfig['attribute']);
-                                    ?>
+                                <label class="form-label small" <?= $childRecord->getAttributeHint($attrConfig['attribute']) ? 'data-title="' . Html::encode($childRecord->getAttributeHint($attrConfig['attribute'])) . '"' : '' ?>>
+                                    <strong>
+                                        <?php
+                                        $childModel = new $this->childModelClass();
+                                        echo isset($attrConfig['label']) ? $attrConfig['label'] : $childModel->getAttributeLabel($attrConfig['attribute']);
+                                        ?>
+                                    </strong>
                                 </label>
                                 <?= $this->renderChildField($childRecord, $attrConfig, $index, $childFormName) ?>
                             </div>
@@ -659,9 +661,14 @@ JS;
             $rowHtml .= '<div class="row">';
 
             foreach ($separated['expandable'] as $attrConfig) {
+                $hint = $childModel->getAttributeHint($attrConfig['attribute']);
+                $dataTitle = $hint ? ' data-title="' . Html::encode($hint) . '"' : '';
+
                 $rowHtml .= '<div class="col-md-6 mb-2">';
-                $rowHtml .= '<label class="form-label small">';
+                $rowHtml .= '<label class="form-label small"' . $dataTitle . '>';
+                $rowHtml .= '<strong>';
                 $rowHtml .= isset($attrConfig['label']) ? Html::encode($attrConfig['label']) : Html::encode($childModel->getAttributeLabel($attrConfig['attribute']));
+                $rowHtml .= '</strong>';
                 $rowHtml .= '</label>';
                 $rowHtml .= $this->renderFieldTemplate($attrConfig, 'INDEX_PLACEHOLDER', true);
                 $rowHtml .= '</div>';
