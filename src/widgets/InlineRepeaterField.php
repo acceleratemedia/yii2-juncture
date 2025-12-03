@@ -457,6 +457,18 @@ class InlineRepeaterField extends InputWidget
             }
         }
 
+        // Collect Select2 configurations for initialization
+        $select2Configs = [];
+        foreach ($this->childAttributes as $attrConfig) {
+            if (($attrConfig['input'] ?? null) === self::INPUT_SELECT2) {
+                $select2Configs[] = [
+                    'attribute' => $attrConfig['attribute'],
+                    'data' => $attrConfig['data'] ?? [],
+                    'inputOptions' => $attrConfig['inputOptions'] ?? []
+                ];
+            }
+        }
+
         $js = <<<JS
 // Copy of JunctureField's validateNewDynamicField function
 function validateNewDynamicField(config)
@@ -528,6 +540,9 @@ function validateNewDynamicField(config)
                     });
                 });
             }
+
+            // Initialize Select2 fields in the newly added row
+            {$this->renderSelect2Initialization($select2Configs)}
 
             // Execute widget initialization callbacks if any
             {$this->renderWidgetCallbacks($widgetCallbacks)}
@@ -625,6 +640,65 @@ JS;
         }
 
         return $callbackJs;
+    }
+
+    /**
+     * Render Select2 initialization code as JavaScript
+     * @param array $select2Configs Array of Select2 configurations
+     * @return string JavaScript code to initialize Select2
+     */
+    protected function renderSelect2Initialization($select2Configs)
+    {
+        if (empty($select2Configs)) {
+            return '';
+        }
+
+        $initJs = '';
+        foreach ($select2Configs as $config) {
+            $attribute = $config['attribute'];
+            $inputOptions = $config['inputOptions'];
+
+            // Build Select2 plugin options from inputOptions
+            $pluginOptions = [];
+            if (isset($inputOptions['placeholder'])) {
+                $pluginOptions['placeholder'] = $inputOptions['placeholder'];
+            }
+            if (isset($inputOptions['tags']) && $inputOptions['tags']) {
+                $pluginOptions['tags'] = true;
+            }
+            // multiple is handled as HTML attribute, but Select2 also respects it
+            $multiple = isset($inputOptions['multiple']) && $inputOptions['multiple'];
+
+            $pluginOptionsJson = Json::encode($pluginOptions);
+
+            $initJs .= "
+            // Initialize Select2 for {$attribute}
+            (function() {
+                let selectElement = lastMainRow.find('select[id*=\"-{$attribute}-\"]').first();
+                if (selectElement.length) {
+                    // Destroy existing Select2 instance if any (shouldn't happen, but just in case)
+                    if (selectElement.data('select2')) {
+                        selectElement.select2('destroy');
+                    }
+                    // Initialize Select2 with options
+                    selectElement.select2({$pluginOptionsJson});
+                }
+
+                // Also check expandable row if it exists
+                if (lastExpandableRow.length) {
+                    let expandableSelect = lastExpandableRow.find('select[id*=\"-{$attribute}-\"]').first();
+                    if (expandableSelect.length) {
+                        if (expandableSelect.data('select2')) {
+                            expandableSelect.select2('destroy');
+                        }
+                        expandableSelect.select2({$pluginOptionsJson});
+                    }
+                }
+            })();
+";
+        }
+
+        return $initJs;
     }
 
     /**
@@ -757,6 +831,8 @@ JS;
                 break;
 
             case self::INPUT_SELECT2:
+                // Render a plain select element that will be initialized as Select2 via JavaScript
+                // This avoids issues with Select2 widget trying to auto-initialize on non-existent elements
                 $data = $attrConfig['data'] ?? [];
                 $fieldHtml .= Html::dropDownList($fieldName, null, $data, $inputOptions);
                 break;
