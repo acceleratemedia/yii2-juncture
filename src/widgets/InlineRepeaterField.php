@@ -174,7 +174,9 @@ class InlineRepeaterField extends InputWidget
                         <table class="table table-sm table-bordered">
                             <thead>
                                 <tr>
-                                    <?php foreach ($this->childAttributes as $attrConfig) : ?>
+                                    <?php
+                                    $separated = $this->separateAttributes();
+                                    foreach ($separated['main'] as $attrConfig) : ?>
                                         <th <?= $childModel->getAttributeHint($attrConfig['attribute']) ? 'data-title="' . Html::encode($childModel->getAttributeHint($attrConfig['attribute'])) . '"' : '' ?>>
                                             <?= isset($attrConfig['label']) ? $attrConfig['label'] : $childModel->getAttributeLabel($attrConfig['attribute']) ?>
                                         </th>
@@ -197,6 +199,26 @@ class InlineRepeaterField extends InputWidget
     }
 
     /**
+     * Separates child attributes into main and expandable groups
+     * @return array ['main' => [...], 'expandable' => [...]]
+     */
+    protected function separateAttributes()
+    {
+        $main = [];
+        $expandable = [];
+
+        foreach ($this->childAttributes as $attrConfig) {
+            if (!empty($attrConfig['expandable'])) {
+                $expandable[] = $attrConfig;
+            } else {
+                $main[] = $attrConfig;
+            }
+        }
+
+        return ['main' => $main, 'expandable' => $expandable];
+    }
+
+    /**
      * Renders a single child record row
      * @param \yii\db\ActiveRecord $childRecord
      * @param int $index
@@ -206,21 +228,50 @@ class InlineRepeaterField extends InputWidget
     protected function renderChildRow($childRecord, $index, $childFormName)
     {
         $rowId = $this->getId() . '-row-' . $index;
+        $expandableRowId = $rowId . '-expandable';
+        $separated = $this->separateAttributes();
+        $hasExpandable = !empty($separated['expandable']);
 
         ob_start();
     ?>
         <tr id="<?= $rowId ?>" data-index="<?= $index ?>">
-            <?php foreach ($this->childAttributes as $attrConfig) : ?>
+            <?php foreach ($separated['main'] as $attrConfig) : ?>
                 <td>
                     <?= $this->renderChildField($childRecord, $attrConfig, $index, $childFormName) ?>
                 </td>
             <?php endforeach; ?>
             <td>
+                <?php if ($hasExpandable) : ?>
+                    <button type="button" class="btn btn-sm btn-link inline-repeater-expand-toggle p-0"
+                        data-target="<?= $expandableRowId ?>"
+                        title="Toggle additional fields">
+                        <i class="fas fa-chevron-down"></i>
+                    </button>
+                <?php endif; ?>
                 <button type="button" class="btn btn-sm btn-danger inline-repeater-delete" title="Delete">
                     <i class="fas fa-trash"></i>
                 </button>
             </td>
         </tr>
+        <?php if ($hasExpandable) : ?>
+            <tr id="<?= $expandableRowId ?>" class="collapse" data-index="<?= $index ?>" data-parent-row="<?= $rowId ?>">
+                <td colspan="<?= count($separated['main']) + 1 ?>">
+                    <div class="row">
+                        <?php foreach ($separated['expandable'] as $attrConfig) : ?>
+                            <div class="col-md-6 mb-2">
+                                <label class="form-label small">
+                                    <?php
+                                    $childModel = new $this->childModelClass();
+                                    echo isset($attrConfig['label']) ? $attrConfig['label'] : $childModel->getAttributeLabel($attrConfig['attribute']);
+                                    ?>
+                                </label>
+                                <?= $this->renderChildField($childRecord, $attrConfig, $index, $childFormName) ?>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                </td>
+            </tr>
+        <?php endif; ?>
 <?php
         return ob_get_clean();
     }
@@ -429,48 +480,99 @@ function validateNewDynamicField(config)
 
     let fullWidthRow = $('#' + rowsContainerId);
     let rowsContainer = fullWidthRow.find('tbody');
-    let rowCounter = rowsContainer.find('tr').length;
+    // Count only main rows (exclude expandable rows which have data-parent-row attribute)
+    let rowCounter = rowsContainer.find('tr:not([data-parent-row])').length;
 
     // Add new row
     container.on('click', '.inline-repeater-add', function(e) {
-        e.preventDefault();
-        let newRow = {$newRowTemplate};
-        newRow = newRow.replace(/INDEX_PLACEHOLDER/g, rowCounter);
-        rowsContainer.append(newRow);
+            e.preventDefault();
+            let newRow = {$newRowTemplate};
+            newRow = newRow.replace(/INDEX_PLACEHOLDER/g, rowCounter);
+            rowsContainer.append(newRow);
 
-        // Show the rows container if collapsed
-        if (!fullWidthRow.hasClass('show')) {
-            fullWidthRow.collapse('show');
-        }
-
-        // Re-initialize date pickers for the newly added row
-        let lastRow = rowsContainer.find('tr:last');
-        lastRow.find('.krajee-datepicker').each(function() {
-            let pickerElement = $(this);
-            if (pickerElement.data('kvDatepicker')) {
-                pickerElement.kvDatepicker('destroy');
+            // Show the rows container if collapsed
+            if (!fullWidthRow.hasClass('show')) {
+                fullWidthRow.collapse('show');
             }
-            pickerElement.kvDatepicker({
-                autoclose: true,
-                format: 'yyyy-mm-dd'
+
+            // Re-initialize date pickers for the newly added row(s)
+            let lastMainRow = rowsContainer.find('tr[data-index="' + rowCounter + '"]:first');
+            let lastExpandableRow = rowsContainer.find('tr[data-index="' + rowCounter + '"]:last');
+
+            // Initialize date pickers in main row
+            lastMainRow.find('.krajee-datepicker').each(function() {
+                let pickerElement = $(this);
+                if (pickerElement.data('kvDatepicker')) {
+                    pickerElement.kvDatepicker('destroy');
+                }
+                pickerElement.kvDatepicker({
+                    autoclose: true,
+                    format: 'yyyy-mm-dd'
+                });
             });
+
+            // Initialize date pickers in expandable row if it exists
+            if (lastExpandableRow.length && lastExpandableRow.hasClass('collapse')) {
+                lastExpandableRow.find('.krajee-datepicker').each(function() {
+                    let pickerElement = $(this);
+                    if (pickerElement.data('kvDatepicker')) {
+                        pickerElement.kvDatepicker('destroy');
+                    }
+                    pickerElement.kvDatepicker({
+                        autoclose: true,
+                        format: 'yyyy-mm-dd'
+                    });
+                });
+            }
+
+            // Execute widget initialization callbacks if any
+            {$this->renderWidgetCallbacks($widgetCallbacks)}
+
+            rowCounter++;
+            container.find('.row-count').text(rowCounter);
         });
 
-        // Execute widget initialization callbacks if any
-        {$this->renderWidgetCallbacks($widgetCallbacks)}
-
-        rowCounter++;
-        container.find('.row-count').text(rowCounter);
-    });
-
-    // Delete row
+    // Delete row (including expandable row if it exists)
     fullWidthRow.on('click', '.inline-repeater-delete', function(e) {
         e.preventDefault();
         if (confirm('Are you sure you want to delete this item?')) {
-            $(this).closest('tr').remove();
-            rowCounter--;
+            let mainRow = $(this).closest('tr');
+            let expandableRow = mainRow.next('tr[data-parent-row="' + mainRow.attr('id') + '"]');
+            mainRow.remove();
+            if (expandableRow.length) {
+                expandableRow.remove();
+            }
+            // Recalculate row count based on actual main rows
+            rowCounter = rowsContainer.find('tr:not([data-parent-row])').length;
             container.find('.row-count').text(rowCounter);
         }
+    });
+
+    // Toggle expandable row for individual rows
+    fullWidthRow.on('click', '.inline-repeater-expand-toggle', function(e) {
+        e.preventDefault();
+        let targetId = $(this).data('target');
+        let expandableRow = $('#' + targetId);
+        let icon = $(this).find('i');
+        let isCurrentlyShown = expandableRow.hasClass('show');
+
+        expandableRow.collapse('toggle');
+
+        // Update icon based on current state (will be toggled after collapse)
+        if (isCurrentlyShown) {
+            icon.removeClass('fa-chevron-up').addClass('fa-chevron-down');
+        } else {
+            icon.removeClass('fa-chevron-down').addClass('fa-chevron-up');
+        }
+
+        // Also handle Bootstrap collapse events for consistency
+        expandableRow.off('shown.bs.collapse hidden.bs.collapse');
+        expandableRow.on('shown.bs.collapse', function() {
+            icon.removeClass('fa-chevron-down').addClass('fa-chevron-up');
+        });
+        expandableRow.on('hidden.bs.collapse', function() {
+            icon.removeClass('fa-chevron-up').addClass('fa-chevron-down');
+        });
     });
 
     // Toggle collapse
@@ -529,115 +631,168 @@ JS;
     {
         $childModel = new $this->childModelClass();
         $childFormName = strtolower($childModel->formName());
+        $separated = $this->separateAttributes();
+        $hasExpandable = !empty($separated['expandable']);
+        $rowId = $this->getId() . '-row-INDEX_PLACEHOLDER';
+        $expandableRowId = $rowId . '-expandable';
 
-        $rowHtml = '<tr data-index="INDEX_PLACEHOLDER">';
+        $rowHtml = '<tr id="' . $rowId . '" data-index="INDEX_PLACEHOLDER">';
 
-        foreach ($this->childAttributes as $attrConfig) {
-            $attribute = $attrConfig['attribute'];
-            $inputType = $attrConfig['input'] ?? self::INPUT_TEXT;
-
-            $fieldName = $this->namePrefix . '[' . $this->childAttributeName . '][INDEX_PLACEHOLDER][' . $attribute . ']';
-            $fieldId = $this->getId() . '-' . $attribute . '-INDEX_PLACEHOLDER';
-
-            // Check if this field is required
-            $isRequired = false;
-            $childModel = new $this->childModelClass();
-            foreach ($childModel->rules() as $rule) {
-                if (is_array($rule) && isset($rule[0]) && isset($rule[1])) {
-                    $attributes = is_array($rule[0]) ? $rule[0] : [$rule[0]];
-                    $validator = $rule[1];
-                    if (in_array($attribute, $attributes) && $validator === 'required') {
-                        $isRequired = true;
-                        break;
-                    }
-                }
-            }
-
-            $inputOptions = ArrayHelper::merge([
-                'id' => $fieldId,
-                'name' => $fieldName,
-                'class' => 'form-control form-control-sm'
-            ], $attrConfig['inputOptions'] ?? []);
-
-            // Add required attribute if field is required
-            if ($isRequired) {
-                $inputOptions['required'] = true;
-            }
-
-            $rowHtml .= '<td>';
-
-            // Add hidden parent FK fields
-            foreach ($this->parentFkColumns as $fkColumn) {
-                $fkFieldName = $this->namePrefix . '[' . $this->childAttributeName . '][INDEX_PLACEHOLDER][' . $fkColumn . ']';
-                $rowHtml .= Html::hiddenInput($fkFieldName, '', [
-                    'class' => 'parent-fk-field',
-                    'data-fk-column' => $fkColumn
-                ]);
-            }
-
-            // Wrap field in proper container for validation
-            $rowHtml .= '<div class="field-' . $fieldId . '">';
-
-            switch ($inputType) {
-                case self::INPUT_TEXTAREA:
-                    $rowHtml .= Html::textarea($fieldName, '', $inputOptions);
-                    break;
-
-                case self::INPUT_DROPDOWN:
-                    $data = $attrConfig['data'] ?? [];
-                    $rowHtml .= Html::dropDownList($fieldName, null, $data, $inputOptions);
-                    break;
-
-                case self::INPUT_DATEPICKER:
-                    $rowHtml .= '<input type="text" class="form-control form-control-sm krajee-datepicker" id="' . $fieldId . '" name="' . $fieldName . '">';
-                    break;
-
-                case self::INPUT_SELECT2:
-                    $data = $attrConfig['data'] ?? [];
-                    $rowHtml .= Html::dropDownList($fieldName, null, $data, $inputOptions);
-                    break;
-
-                case self::INPUT_WIDGET:
-                    // For widgets, use ActiveField like JunctureField's getNewInput() method
-                    if (!isset($attrConfig['widgetClass'])) {
-                        throw new InvalidConfigException('The "widgetClass" property must be set when using INPUT_WIDGET type.');
-                    }
-
-                    // Create a temporary model instance for rendering
-                    $tempModel = new $this->childModelClass();
-
-                    $activeFieldOptions = [
-                        'template' => '{input}{error}',
-                        'enableClientValidation' => false
-                    ];
-
-                    $activeField = $this->form->field($tempModel, $attribute, $activeFieldOptions);
-
-                    $widgetOptions = $attrConfig['widgetOptions'] ?? [];
-                    $widgetOptions['options'] = $inputOptions;
-
-                    // Render the widget through ActiveField and get the HTML
-                    $widgetHtml = $activeField->widget($attrConfig['widgetClass'], $widgetOptions)->render();
-
-                    // Replace the model's field ID with our dynamic field ID
-                    $tempFieldId = Html::getInputId($tempModel, $attribute);
-                    $widgetHtml = str_replace($tempFieldId, $fieldId, $widgetHtml);
-
-                    $rowHtml .= $widgetHtml;
-                    break;
-
-                default:
-                case self::INPUT_TEXT:
-                    $rowHtml .= Html::textInput($fieldName, '', $inputOptions);
-                    break;
-            }
-
-            $rowHtml .= '</div></td>';
+        // Render main row fields
+        foreach ($separated['main'] as $attrConfig) {
+            $rowHtml .= $this->renderFieldTemplate($attrConfig, 'INDEX_PLACEHOLDER');
         }
 
-        $rowHtml .= '<td><button type="button" class="btn btn-sm btn-danger inline-repeater-delete"><i class="fas fa-trash"></i></button></td>';
+        // Actions column
+        $rowHtml .= '<td>';
+        if ($hasExpandable) {
+            $rowHtml .= '<button type="button" class="btn btn-sm btn-link inline-repeater-expand-toggle p-0" data-target="' . $expandableRowId . '" title="Toggle additional fields"><i class="fas fa-chevron-down"></i></button>';
+        }
+        $rowHtml .= '<button type="button" class="btn btn-sm btn-danger inline-repeater-delete"><i class="fas fa-trash"></i></button>';
+        $rowHtml .= '</td>';
         $rowHtml .= '</tr>';
 
+        // Render expandable row if needed
+        if ($hasExpandable) {
+            $rowHtml .= '<tr id="' . $expandableRowId . '" class="collapse" data-index="INDEX_PLACEHOLDER" data-parent-row="' . $rowId . '">';
+            $rowHtml .= '<td colspan="' . (count($separated['main']) + 1) . '">';
+            $rowHtml .= '<div class="row">';
+
+            foreach ($separated['expandable'] as $attrConfig) {
+                $rowHtml .= '<div class="col-md-6 mb-2">';
+                $rowHtml .= '<label class="form-label small">';
+                $rowHtml .= isset($attrConfig['label']) ? Html::encode($attrConfig['label']) : Html::encode($childModel->getAttributeLabel($attrConfig['attribute']));
+                $rowHtml .= '</label>';
+                $rowHtml .= $this->renderFieldTemplate($attrConfig, 'INDEX_PLACEHOLDER', true);
+                $rowHtml .= '</div>';
+            }
+
+            $rowHtml .= '</div>';
+            $rowHtml .= '</td>';
+            $rowHtml .= '</tr>';
+        }
+
         return Json::encode($rowHtml);
+    }
+
+    /**
+     * Renders a field template for new rows
+     * @param array $attrConfig
+     * @param string $indexPlaceholder
+     * @param bool $skipTd Whether to skip the <td> wrapper (for expandable fields)
+     * @return string
+     */
+    protected function renderFieldTemplate($attrConfig, $indexPlaceholder, $skipTd = false)
+    {
+        $attribute = $attrConfig['attribute'];
+        $inputType = $attrConfig['input'] ?? self::INPUT_TEXT;
+
+        $fieldName = $this->namePrefix . '[' . $this->childAttributeName . '][' . $indexPlaceholder . '][' . $attribute . ']';
+        $fieldId = $this->getId() . '-' . $attribute . '-' . $indexPlaceholder;
+
+        // Check if this field is required
+        $isRequired = false;
+        $childModel = new $this->childModelClass();
+        foreach ($childModel->rules() as $rule) {
+            if (is_array($rule) && isset($rule[0]) && isset($rule[1])) {
+                $attributes = is_array($rule[0]) ? $rule[0] : [$rule[0]];
+                $validator = $rule[1];
+                if (in_array($attribute, $attributes) && $validator === 'required') {
+                    $isRequired = true;
+                    break;
+                }
+            }
+        }
+
+        $inputOptions = ArrayHelper::merge([
+            'id' => $fieldId,
+            'name' => $fieldName,
+            'class' => 'form-control form-control-sm'
+        ], $attrConfig['inputOptions'] ?? []);
+
+        // Add required attribute if field is required
+        if ($isRequired) {
+            $inputOptions['required'] = true;
+        }
+
+        $fieldHtml = '';
+
+        if (!$skipTd) {
+            $fieldHtml .= '<td>';
+        }
+
+        // Add hidden parent FK fields
+        foreach ($this->parentFkColumns as $fkColumn) {
+            $fkFieldName = $this->namePrefix . '[' . $this->childAttributeName . '][' . $indexPlaceholder . '][' . $fkColumn . ']';
+            $fieldHtml .= Html::hiddenInput($fkFieldName, '', [
+                'class' => 'parent-fk-field',
+                'data-fk-column' => $fkColumn
+            ]);
+        }
+
+        // Wrap field in proper container for validation
+        $fieldHtml .= '<div class="field-' . $fieldId . '">';
+
+        switch ($inputType) {
+            case self::INPUT_TEXTAREA:
+                $fieldHtml .= Html::textarea($fieldName, '', $inputOptions);
+                break;
+
+            case self::INPUT_DROPDOWN:
+                $data = $attrConfig['data'] ?? [];
+                $fieldHtml .= Html::dropDownList($fieldName, null, $data, $inputOptions);
+                break;
+
+            case self::INPUT_DATEPICKER:
+                $fieldHtml .= '<input type="text" class="form-control form-control-sm krajee-datepicker" id="' . $fieldId . '" name="' . $fieldName . '">';
+                break;
+
+            case self::INPUT_SELECT2:
+                $data = $attrConfig['data'] ?? [];
+                $fieldHtml .= Html::dropDownList($fieldName, null, $data, $inputOptions);
+                break;
+
+            case self::INPUT_WIDGET:
+                // For widgets, use ActiveField like JunctureField's getNewInput() method
+                if (!isset($attrConfig['widgetClass'])) {
+                    throw new InvalidConfigException('The "widgetClass" property must be set when using INPUT_WIDGET type.');
+                }
+
+                // Create a temporary model instance for rendering
+                $tempModel = new $this->childModelClass();
+
+                $activeFieldOptions = [
+                    'template' => '{input}{error}',
+                    'enableClientValidation' => false
+                ];
+
+                $activeField = $this->form->field($tempModel, $attribute, $activeFieldOptions);
+
+                $widgetOptions = $attrConfig['widgetOptions'] ?? [];
+                $widgetOptions['options'] = $inputOptions;
+
+                // Render the widget through ActiveField and get the HTML
+                $widgetHtml = $activeField->widget($attrConfig['widgetClass'], $widgetOptions)->render();
+
+                // Replace the model's field ID with our dynamic field ID
+                $tempFieldId = Html::getInputId($tempModel, $attribute);
+                $widgetHtml = str_replace($tempFieldId, $fieldId, $widgetHtml);
+
+                $fieldHtml .= $widgetHtml;
+                break;
+
+            default:
+            case self::INPUT_TEXT:
+                $fieldHtml .= Html::textInput($fieldName, '', $inputOptions);
+                break;
+        }
+
+        $fieldHtml .= '</div>';
+
+        if (!$skipTd) {
+            $fieldHtml .= '</td>';
+        }
+
+        return $fieldHtml;
     }
 }
