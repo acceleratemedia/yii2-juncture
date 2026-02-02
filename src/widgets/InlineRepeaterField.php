@@ -486,6 +486,7 @@ function validateNewDynamicField(config)
 
 (function() {
     let widgetId = '{$widgetId}';
+    let childAttributeName = '{$this->childAttributeName}';
     let container = $('#' + widgetId + '-container');
     let rowsContainerId = '{$rowsContainerId}';
 
@@ -554,17 +555,50 @@ function validateNewDynamicField(config)
     // Delete row (including expandable row if it exists)
     fullWidthRow.on('click', '.inline-repeater-delete', function(e) {
         e.preventDefault();
-        if (confirm('Are you sure you want to delete this item?')) {
-            let mainRow = $(this).closest('tr');
-            let expandableRow = mainRow.next('tr[data-parent-row="' + mainRow.attr('id') + '"]');
-            mainRow.remove();
-            if (expandableRow.length) {
-                expandableRow.remove();
-            }
-            // Recalculate row count based on actual main rows
-            rowCounter = rowsContainer.find('tr:not([data-parent-row])').length;
-            container.find('.row-count').text(rowCounter);
+        let mainRow = $(this).closest('tr');
+        let expandableRow = mainRow.next('tr[data-parent-row="' + mainRow.attr('id') + '"]');
+        
+        // Get record ID from hidden input (if exists - indicates saved record)
+        let idInput = mainRow.find('input[name*="[id]"]').first();
+        let recordId = idInput.length ? idInput.val() : null;
+        
+        // Emit beforeDelete event - can be used to show custom confirmation or perform AJAX delete
+        let beforeDeleteEvent = $.Event('inlineRepeater:beforeDelete', {
+            widgetId: widgetId,
+            childAttributeName: childAttributeName,
+            recordId: recordId,
+            mainRow: mainRow,
+            expandableRow: expandableRow.length ? expandableRow : null
+        });
+        $(document).trigger(beforeDeleteEvent);
+        
+        // If event was prevented, don't delete
+        if (beforeDeleteEvent.isDefaultPrevented()) {
+            return;
         }
+        
+        // Default confirmation if no custom handler prevented it
+        if (!beforeDeleteEvent.skipConfirmation && !confirm('Are you sure you want to delete this item?')) {
+            return;
+        }
+        
+        // Remove the rows
+        mainRow.remove();
+        if (expandableRow.length) {
+            expandableRow.remove();
+        }
+        
+        // Recalculate row count based on actual main rows
+        rowCounter = rowsContainer.find('tr:not([data-parent-row])').length;
+        container.find('.row-count').text(rowCounter);
+        
+        // Emit afterDelete event - can be used to perform AJAX delete
+        let afterDeleteEvent = $.Event('inlineRepeater:afterDelete', {
+            widgetId: widgetId,
+            childAttributeName: childAttributeName,
+            recordId: recordId
+        });
+        $(document).trigger(afterDeleteEvent);
     });
 
     // Toggle expandable row for individual rows
